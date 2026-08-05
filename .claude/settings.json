@@ -1,0 +1,19 @@
+{
+  "enabledPlugins": {
+    "terraform-module-generation@hashicorp": true
+  },
+  "extraKnownMarketplaces": {
+    "hashicorp": {
+      "source": {
+        "source": "github",
+        "repo": "hashicorp/agent-skills"
+      }
+    },
+    "antonbabenko": {
+      "source": {
+        "source": "github",
+        "repo": "antonbabenko/agent-plugins"
+      }
+    }
+  }
+}
