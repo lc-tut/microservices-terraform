@@ -26,9 +26,11 @@ microservices-terraform/
 │   │   ├── members/                   # メンバーライフサイクル管理
 │   │   │   ├── active/
 │   │   │   │   ├── grad-2027/         # 2027年度卒業予定コホート
-│   │   │   │   │   ├── members_secrets.yaml.enc  # 管理者: email・student_id・role（SOPS）
+│   │   │   │   │   ├── members.yaml              # 管理者: id・role（平文 OK）
+│   │   │   │   │   ├── members_secrets.yaml.enc  # 管理者: email・student_id（SOPS 暗号化）
 │   │   │   │   │   └── auto-gen-members.yaml     # Bot: username・display_name（enrollment後）
 │   │   │   │   └── grad-2026/         # 2026年度卒業予定コホート
+│   │   │   │       ├── members.yaml
 │   │   │   │       ├── members_secrets.yaml.enc
 │   │   │   │       └── auto-gen-members.yaml
 │   │   │   ├── alumni/                # OB/OG（無効化済みメンバー）
@@ -38,6 +40,7 @@ microservices-terraform/
 │   │   │   └── main.tf
 │   │   └── github/                    # GitHub Organization 設定
 │   │       ├── teams.tf               # GitHub Teams 定義
+│   │       ├── members.tf             # GitHub Org メンバー管理（auto-gen から取得）
 │   │       └── branch_protection.tf   # ブランチ保護・PR 承認ルール
 │   │
 │   ├── catalog/                       # 🟡 Tier 2：権限者が編集、誰でも PR 可
@@ -54,14 +57,17 @@ microservices-terraform/
 │   │   ├── teams/                     # チームの登録・定義（Authentik グループ）
 │   │   │   ├── _template/             # 新チーム作成テンプレート（コピーして使う）
 │   │   │   │   ├── authentik.tf
+│   │   │   │   ├── members.yaml       # チームメンバーの username リスト
 │   │   │   │   ├── variables.tf       # billing_account_id（省略可）
 │   │   │   │   └── outputs.tf
 │   │   │   ├── infra/
 │   │   │   │   ├── authentik.tf       # Authentik グループ定義
+│   │   │   │   ├── members.yaml       # チームメンバーの username リスト
 │   │   │   │   ├── variables.tf
 │   │   │   │   └── outputs.tf         # 他スタックが参照する ID など
 │   │   │   └── web/
 │   │   │       ├── authentik.tf
+│   │   │       ├── members.yaml
 │   │   │       ├── variables.tf
 │   │   │       └── outputs.tf
 │   │   │
@@ -77,8 +83,12 @@ microservices-terraform/
 │   │           ├── variables.tf
 │   │           └── outputs.tf
 │   │
-│   ├── workspaces/                    # 🟢 Tier 3：プロジェクトの自由空間
-│   │   └── my-product/               # プロジェクトオーナーが自由に管理
+│   ├── workspaces/                    # 🟢 Tier 3：チーム・個人の自由空間
+│   │   ├── teams/
+│   │   │   ├── infra/                 # infra チームが自由に管理
+│   │   │   └── web/
+│   │   └── projects/
+│   │       └── my-product/            # プロジェクトオーナーが自由に管理
 │   │
 │   └── modules/                       # 🔴 Tier 1 扱い（管理者が管理）
 │       ├── authentik-user/
@@ -88,7 +98,8 @@ microservices-terraform/
 │       ├── lc-cloud-quota/
 │       └── harbor-project/
 │
-├── scripts/                           # 運用スクリプト（年度末確認 cron 等）
+├── scripts/
+│   └── sync-mail-aliases.sh           # Mailu エイリアス同期（Terraform 外・State なし）
 ├── documents/                         # 設計ドキュメント
 └── .github/                           # Actions・CODEOWNERS
 ```
