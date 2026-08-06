@@ -45,3 +45,17 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# ローカル開発用 provider override（本番では使わない）
+terraform/local-override.tf
+
+# ローカル開発環境の秘密情報
+local/authentik/.env
+local/.env
+
+# SOPS 復号後の平文（絶対に含めない）
+*.dec
+
+# OS
+.DS_Store
+Thumbs.db

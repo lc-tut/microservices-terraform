@@ -1,0 +1,23 @@
+# ローカル開発用プロバイダー設定
+# このファイルを terraform/local-override.tf にコピーして使う
+# 本番環境では削除すること（.gitignore 済み）
+
+provider "openstack" {
+  auth_url    = "http://192.168.x.x/identity"  # DevStack VM の IP に変更
+  user_name   = "admin"
+  password    = "secret"
+  tenant_name = "admin"
+  domain_name = "Default"
+  region      = "RegionOne"
+  insecure    = true
+}
+
+provider "authentik" {
+  url   = "http://localhost:9000"
+  token = ""  # Authentik 管理画面で生成したトークンを入れる
+}
+
+provider "vault" {
+  address = "http://localhost:8200"
+  token   = "root"
+}
