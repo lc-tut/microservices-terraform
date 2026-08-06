@@ -186,10 +186,10 @@ jobs:
             | sort -u \
             | jq -R -s -c 'split("\n")[:-1]')
 
-          # Phase 2: catalog/billing-accounts/（4 階層）
+          # Phase 2: catalog/billing-accounts/（5 階層: catalog/billing-accounts/<type>/<name>/）
           phase2=$(echo "$changed" \
             | grep -E '^terraform/catalog/billing-accounts/' \
-            | awk -F'/' '{print $1"/"$2"/"$3"/"$4}' \
+            | awk -F'/' '{print $1"/"$2"/"$3"/"$4"/"$5}' \
             | sort -u \
             | jq -R -s -c 'split("\n")[:-1]')
 
@@ -341,26 +341,40 @@ jobs:
       group: apply-${{ matrix.stack }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    environment: production
-    steps: # apply-phase1 と同一
+    # workspace は CODEOWNERS 承認済みのため自動 apply。
+    # 管理者権限の Vault ロールは使わず、catalog/projects/ が発行した
+    # 制限済み Application Credential（GitHub Secret）を使用する。
+    steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-apply
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
+
+      - name: プロジェクト名の導出
+        id: project
+        run: |
+          # terraform/workspaces/projects/my-product → my-product
+          # terraform/workspaces/teams/infra        → infra
+          echo "name=$(echo '${{ matrix.stack }}' \
+            | awk -F'/' '{print $NF}')" >> $GITHUB_OUTPUT
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
-      - name: Apply
+
+      - name: Apply（制限済み Application Credential を使用）
         working-directory: ${{ matrix.stack }}
+        env:
+          # catalog/projects/<name>/lc_cloud.tf で発行された Application Credential。
+          # Phase 3 の apply 時に github_actions_secret で自動設定される。
+          OS_APPLICATION_CREDENTIAL_ID: >-
+            ${{ secrets[format('LC_CLOUD_APP_CRED_ID_{0}',
+              steps.project.outputs.name)] }}
+          OS_APPLICATION_CREDENTIAL_SECRET: >-
+            ${{ secrets[format('LC_CLOUD_APP_CRED_SECRET_{0}',
+              steps.project.outputs.name)] }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -387,12 +401,13 @@ main ブランチ：
 ## セキュリティ考慮事項
 
 | 項目 | 対応 |
-|------|------|
+| --- | --- |
 | 長期 API トークン | 使わない。Vault OIDC で都度取得 |
-| SOPS 復号鍵 | GitHub Actions Secrets に保管（Protected）|
+| SOPS 復号鍵 | GitHub Actions Secrets に保管（Protected） |
 | plan ロールと apply ロール | Vault で権限分離（plan は読み取り専用） |
-| plan artifact | 6 時間以内のみ有効。それ以降は再 plan を要求 |
-| Tier 1 フォルダへの apply | GitHub Environment の手動承認ゲートを通過後のみ実行 |
+| Tier 1–3 フォルダへの apply | Phase 1–3: `environment: production`（手動承認ゲート） |
+| Workspace（Phase 4）の apply | CODEOWNERS 承認済み PR の merge を条件に自動実行 |
+| Workspace の OpenStack 認証 | Vault 管理者権限を渡さない。`catalog/projects/` が発行した Access Rules 付き Application Credential（GitHub Secret）を使用 |
 
 ---
 

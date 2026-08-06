@@ -36,6 +36,12 @@ microservices-terraform/
 │   │   │   ├── alumni/                # OB/OG（無効化済みメンバー）
 │   │   │   │   └── grad-2025/         # 2025年度卒業済みコホート
 │   │   │   └── auto-gen-github-usernames.yaml  # Bot: GitHub username マップ（OAuth連携時）
+│   │   ├── network/                   # VPC Gateway・外部ネットワーク・subnetpool
+│   │   │   ├── gateway.tf             # VPC Gateway ルーター
+│   │   │   ├── subnetpool.tf          # IP 帯域マスタープール
+│   │   │   └── external_network.tf    # 外部ネットワーク・RBAC
+│   │   ├── images/                    # ベース VM イメージ管理
+│   │   │   └── main.tf                # SSH CA 組み込み済みイメージ
 │   │   ├── quotas/                    # LC-Cloud クォータティア定義
 │   │   │   └── main.tf
 │   │   └── github/                    # GitHub Organization 設定
@@ -74,12 +80,12 @@ microservices-terraform/
 │   │   └── projects/                  # プロジェクトの登録・定義
 │   │       ├── _template/             # 新プロジェクト作成テンプレート（コピーして使う）
 │   │       │   ├── harbor.tf
-│   │       │   ├── lc_cloud.tf        # k8s Namespace・CD ツール連携（TBD）
+│   │       │   ├── lc_cloud.tf        # OpenStack network・subnet・Application Credential・DNS zone
 │   │       │   ├── variables.tf
 │   │       │   └── outputs.tf
 │   │       └── my-product/
 │   │           ├── harbor.tf          # Harbor registry
-│   │           ├── lc_cloud.tf        # k8s Namespace・CD ツール連携（TBD）
+│   │           ├── lc_cloud.tf        # OpenStack network・subnet・Application Credential・DNS zone
 │   │           ├── variables.tf
 │   │           └── outputs.tf
 │   │
@@ -91,12 +97,17 @@ microservices-terraform/
 │   │       └── my-product/            # プロジェクトオーナーが自由に管理
 │   │
 │   └── modules/                       # 🔴 Tier 1 扱い（管理者が管理）
-│       ├── authentik-user/
-│       ├── authentik-group/
-│       ├── authentik-flow/
-│       ├── lc-cloud-organization/
-│       ├── lc-cloud-quota/
-│       └── harbor-project/
+│       ├── authentik-user/            # Authentik ユーザー作成
+│       ├── authentik-group/           # Authentik グループ作成
+│       ├── authentik-flow/            # Authentik フロー定義
+│       ├── lc-cloud-organization/     # OpenStack プロジェクト + クォータ
+│       ├── lc-cloud-quota/            # クォータティア定義
+│       ├── harbor-project/            # Harbor プロジェクト + RBAC
+│       ├── lc-vm/                     # VM + ボリューム + SG（Workspace 向け便利モジュール）
+│       ├── lc-k8s-app/               # K8s PVC + Secret + ConfigMap
+│       ├── lc-object-bucket/          # Swift コンテナ + CORS / lifecycle
+│       ├── lc-db/                     # Trove DB インスタンス + ユーザー
+│       └── lc-dns-record/             # DNS レコード（ゾーンを data で自動参照）
 │
 ├── scripts/
 │   └── sync-mail-aliases.sh           # Mailu エイリアス同期（Terraform 外・State なし）
