@@ -31,13 +31,11 @@ VirtualBox / VMware / 手元の Linux マシンで Ubuntu 24.04 を用意して�
 
 ---
 
-## 1. OpenStack（kolla-ansible）
+## 1. OpenStack（DevStack）
 
-kolla-ansible は OpenStack の各サービスを Docker コンテナとして起動する
-公式のデプロイツールです。DevStack より安定しており、本番に近い構成で動作します。
-
-> **WSL2 では動作しません。** Neutron が使う Open vSwitch は
-> WSL2 のカーネルでは正常動作しないため、専用の Ubuntu 24.04 VM が必要です。
+DevStack はスクリプト一発で OpenStack をセットアップできる開発用ツールです。
+Neutron が OS レベルのカーネル機能（Open vSwitch）に依存するため、
+**WSL2 では動作しません**。専用の Ubuntu 24.04 VM が必要です。
 
 ### 必要リソース
 
@@ -46,76 +44,60 @@ kolla-ansible は OpenStack の各サービスを Docker コンテナとして�
 | RAM | 8 GB | 16 GB |
 | CPU | 2 コア | 4 コア |
 | ディスク | 50 GB | 80 GB |
-| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
-| NIC | 2 つ | 2 つ（管理用 + 外部ネットワーク用） |
+| OS | Ubuntu 22.04 | Ubuntu 24.04 LTS |
 
 ### セットアップ
 
 ```bash
-# 依存パッケージのインストール
-sudo apt update
-sudo apt install -y python3-dev python3-pip python3-venv git
+# stack ユーザーを作成（root で実行）
+useradd -s /bin/bash -d /opt/stack -m stack
+echo "stack ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+su - stack
 
-# 仮想環境を作成して kolla-ansible をインストール
-python3 -m venv /opt/kolla-venv
-source /opt/kolla-venv/bin/activate
-pip install kolla-ansible
-
-# 設定ディレクトリを準備
-sudo mkdir -p /etc/kolla
-sudo chown $USER /etc/kolla
-cp /opt/kolla-venv/share/kolla-ansible/etc_examples/kolla/globals.yml /etc/kolla/
-cp /opt/kolla-venv/share/kolla-ansible/etc_examples/kolla/passwords.yml /etc/kolla/
+# DevStack を取得
+git clone https://opendev.org/openstack/devstack
+cd devstack
 ```
 
-`/etc/kolla/globals.yml` を編集します。
+`local.conf` を作成します。
 
-```yaml
-# /etc/kolla/globals.yml（主要項目のみ）
-kolla_base_distro: "ubuntu"
-openstack_release: "2025.2"
+```ini
+# /opt/stack/devstack/local.conf
+[[local|localrc]]
+ADMIN_PASSWORD=secret
+DATABASE_PASSWORD=secret
+RABBIT_PASSWORD=secret
+SERVICE_PASSWORD=secret
 
-# ネットワーク設定（ip addr で確認した NIC 名に変更）
-network_interface: "eth0"         # 管理ネットワーク NIC
-neutron_external_interface: "eth1" # 外部ネットワーク NIC
+# VM の IP アドレスに変更する
+HOST_IP=192.168.x.x
 
-kolla_internal_vip_address: "192.168.x.x"  # 管理 NIC の IP
+# Tempest は不要
+disable_service tempest
 
-# 有効化するサービス
-enable_cinder: "yes"
-enable_designate: "yes"
-enable_barbican: "yes"
-enable_octavia: "yes"
+# Designate (DNS)
+enable_plugin designate https://opendev.org/openstack/designate
 
-# 無効化するサービス（初期は不要）
-enable_trove: "no"
-enable_manila: "no"
+# Barbican (Key Management)
+enable_plugin barbican https://opendev.org/openstack/barbican
+
+# Octavia (LB) — 不要なら省略可
+enable_plugin octavia https://opendev.org/openstack/octavia
+enable_service octavia,o-cw,o-hk,o-hm,o-api
 ```
+
+> Trove と Manila は DevStack での安定性が低いため初期は除外します。
 
 ```bash
-# パスワードを自動生成
-kolla-genpwd
-
-# Docker をインストール（未インストールの場合）
-kolla-ansible install-deps
-
-# All-in-one デプロイ（20〜40 分）
-kolla-ansible -i /opt/kolla-venv/share/kolla-ansible/ansible/inventory/all-in-one \
-  bootstrap-servers
-kolla-ansible -i /opt/kolla-venv/share/kolla-ansible/ansible/inventory/all-in-one \
-  prechecks
-kolla-ansible -i /opt/kolla-venv/share/kolla-ansible/ansible/inventory/all-in-one \
-  deploy
+# セットアップ開始（20〜40 分）
+./stack.sh
 ```
 
 ### 認証情報の確認
 
 ```bash
-# admin-openrc.sh を生成
-kolla-ansible -i .../all-in-one post-deploy
-source /etc/kolla/admin-openrc.sh
+source /opt/stack/devstack/openrc admin admin
 
-# 動作確認
 openstack project list
 openstack network list
 ```
@@ -126,9 +108,9 @@ openstack network list
 # local/local-override.tf.example をコピーして編集
 # terraform/local-override.tf（.gitignore 済み）
 provider "openstack" {
-  auth_url    = "http://192.168.x.x:5000"
+  auth_url    = "http://192.168.x.x/identity"
   user_name   = "admin"
-  password    = "</etc/kolla/passwords.yml の keystone_admin_password>"
+  password    = "secret"
   tenant_name = "admin"
   domain_name = "Default"
   region      = "RegionOne"
@@ -138,7 +120,6 @@ provider "openstack" {
 
 ### ローカル State バックエンド
 
-Ceph RGW の代わりにローカルファイルを使います。
 `-backend=false` で state なしで plan のみ確認できます。
 
 ```bash
@@ -403,8 +384,8 @@ rm terraform/local-override.tf
 
 ## 参考リンク
 
-- [kolla-ansible クイックスタート](https://docs.openstack.org/kolla-ansible/latest/user/quickstart.html)
-- [kolla-ansible Ubuntu 24.04 インストールガイド](https://superuser.openinfra.org/articles/kolla-ansible-openstack-installation-ubuntu-24-04/)
+- [DevStack 公式ドキュメント](https://docs.openstack.org/devstack/latest/)
+- [DevStack on Ubuntu 24.04 インストールガイド](https://medium.com/@ion.stefanache0/installing-openstack-using-devstack-under-virgin-fresh-ubuntu-24-04-lts-e3790280359b)
 - [Authentik Docker Compose インストール](https://version-2025-4.goauthentik.io/docs/install-config/install/docker-compose)
 - [kind クイックスタート](https://kind.sigs.k8s.io/docs/user/quick-start/)
 - [Vault dev モード](https://developer.hashicorp.com/vault/docs/concepts/dev-server)
