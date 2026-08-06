@@ -14,7 +14,7 @@ services:
       retries: 5
 
   server:
-    image: ghcr.io/goauthentik/server:2025.10
+    image: ghcr.io/goauthentik/server:2026.6
     command: server
     environment:
       AUTHENTIK_REDIS__HOST: ""
@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: ghcr.io/goauthentik/server:2025.10
+    image: ghcr.io/goauthentik/server:2026.6
     command: worker
     environment:
       AUTHENTIK_REDIS__HOST: ""

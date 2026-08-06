@@ -150,6 +150,12 @@ terraform plan
 
 ## 2. Authentik (Docker Compose)
 
+### バージョンについて
+
+Authentik は `:latest` タグが `2025.2` 以降 deprecated になっているため、
+必ず固定バージョンを指定します。最新版は
+[GitHub Releases](https://github.com/goauthentik/authentik/releases) で確認してください。
+
 ### docker-compose.yml
 
 リポジトリの `local/` ディレクトリに配置します。
@@ -172,7 +178,7 @@ services:
       retries: 5
 
   server:
-    image: ghcr.io/goauthentik/server:2025.10
+    image: ghcr.io/goauthentik/server:2026.6
     command: server
     environment:
       AUTHENTIK_REDIS__HOST: ""   # 2025.10 以降 Redis 不要
@@ -190,7 +196,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: ghcr.io/goauthentik/server:2025.10
+    image: ghcr.io/goauthentik/server:2026.6
     command: worker
     environment:
       AUTHENTIK_REDIS__HOST: ""
