@@ -207,6 +207,6 @@ terraform {
 
 ### セキュリティ
 
-- GitHub Actions から Vault（LC-Cloud 上）へ OIDC で認証
-- 長期的な API トークンは CI 環境変数に保持しない
-- SOPS の復号鍵は GitHub Actions Secrets に保管
+- 認証情報は GitHub Actions Secrets に保管（`AUTHENTIK_TOKEN` / `LC_CLOUD_APP_CRED_*`）
+- SOPS の復号鍵は `SOPS_AGE_KEY` として GitHub Actions Secrets に保管
+- Workspace（Phase 4）は `catalog/projects/` が発行した Access Rules 付き Application Credential のみ使用
