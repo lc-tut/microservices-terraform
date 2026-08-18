@@ -72,7 +72,6 @@ CODEOWNERS による承認ゲートを通過してから apply する。
 | **Harbor** | プロジェクト・RBAC・脆弱性スキャンポリシー |
 | **LC-Cloud（OpenStack）** | プロジェクト・ネットワーク・クォータ・Application Credential・Floating IP 等 |
 | **LC-Cloud（Kubernetes）** | Namespace・PVC・Secret・ConfigMap・ServiceAccount |
-| **Vault** | Terraform CI/CD 用シークレット・per-project Application Credential |
 
 ---
 
@@ -105,4 +104,5 @@ CODEOWNERS による承認ゲートを通過してから apply する。
 | `12-openstack-resources.md` | OpenStack リソース管理方針・Tier 分類・Access Rules |
 | `13-operation-layers.md` | Terraform / Middleware / GitOps の操作レイヤー設計 |
 | `14-middleware-architecture.md` | Middleware API マイクロサービスアーキテクチャ |
-| `15-local-development.md` | ローカル開発環境（DevStack・Authentik・kind・Vault） |
+| `15-local-development.md` | ローカル開発環境（GK41 OpenStack・Authentik・kind・Vault） |
+| `16-implementation-phases.md` | 実装フェーズ・順序・レビュー |

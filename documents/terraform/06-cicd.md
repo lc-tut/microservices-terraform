@@ -53,7 +53,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write    # Vault OIDC 認証用
 
 jobs:
   detect-changes:
@@ -85,15 +84,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Vault から認証情報を取得（OIDC、長期トークン不要）
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-plan
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
+      # 認証情報は GitHub Secrets から取得
+      # AUTHENTIK_TOKEN, LC_CLOUD_APP_CRED_ID, LC_CLOUD_APP_CRED_SECRET を設定しておく
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -116,6 +108,10 @@ jobs:
       - name: Plan
         id: plan
         working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
         run: |
           terraform init
           terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
@@ -161,7 +157,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   detect-changes:
@@ -230,14 +225,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-apply
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
+      # 認証情報は GitHub Secrets から取得
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
@@ -247,6 +235,10 @@ jobs:
         run: echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
       - name: Apply
         working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -268,14 +260,7 @@ jobs:
     environment: production
     steps: # apply-phase1 と同一
       - uses: actions/checkout@v4
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-apply
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
+      # 認証情報は GitHub Secrets から取得
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
@@ -285,6 +270,10 @@ jobs:
         run: echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
       - name: Apply
         working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -306,14 +295,7 @@ jobs:
     environment: production
     steps: # apply-phase1 と同一
       - uses: actions/checkout@v4
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-apply
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
+      # 認証情報は GitHub Secrets から取得
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
@@ -323,6 +305,10 @@ jobs:
         run: echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
       - name: Apply
         working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -402,12 +388,11 @@ main ブランチ：
 
 | 項目 | 対応 |
 | --- | --- |
-| 長期 API トークン | 使わない。Vault OIDC で都度取得 |
-| SOPS 復号鍵 | GitHub Actions Secrets に保管（Protected） |
-| plan ロールと apply ロール | Vault で権限分離（plan は読み取り専用） |
+| 認証情報の保管 | GitHub Actions Secrets に保管（Protected Branch 設定で保護） |
+| SOPS 復号鍵 | `SOPS_AGE_KEY` として GitHub Secrets に保管 |
 | Tier 1–3 フォルダへの apply | Phase 1–3: `environment: production`（手動承認ゲート） |
 | Workspace（Phase 4）の apply | CODEOWNERS 承認済み PR の merge を条件に自動実行 |
-| Workspace の OpenStack 認証 | Vault 管理者権限を渡さない。`catalog/projects/` が発行した Access Rules 付き Application Credential（GitHub Secret）を使用 |
+| Workspace の OpenStack 認証 | admin 権限を渡さない。`catalog/projects/` が発行した Access Rules 付き Application Credential（GitHub Secret）を使用 |
 
 ---
 
@@ -429,7 +414,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
 
 jobs:
   detect-stacks:
@@ -454,14 +438,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.lc-cloud.example.internal
-          method: jwt
-          role: github-terraform-plan
-          secrets: |
-            secret/data/terraform/authentik   AUTHENTIK_TOKEN ;
-            secret/data/terraform/lc-cloud    LC_CLOUD_TOKEN
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
@@ -472,6 +448,10 @@ jobs:
       - name: Plan
         id: plan
         working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
         run: |
           terraform init
           terraform plan -no-color 2>&1 | tee plan.txt

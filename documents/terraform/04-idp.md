@@ -17,15 +17,13 @@ terraform/platform/idp/
 │   ├── enrollment.tf    # 入会フロー（username 自己設定）
 │   └── recovery.tf      # パスワードリセットフロー
 ├── providers/
-│   ├── lc_cloud.tf      # LC-Cloud SAML/OIDC プロバイダ
+│   ├── lc_cloud.tf      # LC-Cloud OIDC プロバイダ（フェデレーション認証）
 │   └── github_source.tf # GitHub OAuth Source（任意連携）
 ├── policies/
 │   └── username.tf      # username バリデーションポリシー
-├── notifications/
-│   ├── transports.tf    # Webhook・メール送信設定
-│   └── rules.tf         # 通知トリガールール
-└── scim/
-    └── lc_cloud.tf      # SCIM outbound（LC-Cloud へのユーザー同期）
+└── notifications/
+    ├── transports.tf    # Webhook・メール送信設定
+    └── rules.tf         # 通知トリガールール
 ```
 
 ---
@@ -376,42 +374,29 @@ resource "authentik_policy_binding" "source_unlinked_rule" {
 
 ---
 
-## SCIM Outbound（LC-Cloud 同期）
+## LC-Cloud へのユーザー同期（OIDC フェデレーション）
 
-Authentik から LC-Cloud の Keystone へユーザー・グループを自動同期します。
+標準 Keystone には SCIM エンドポイントが存在しないため、
+SCIM ではなく **OIDC フェデレーション** を使います。
+Authentik がユーザーの唯一の管理元となり、Keystone にユーザーレコードをコピーしません。
 
-```hcl
-# scim/lc_cloud.tf
-resource "authentik_provider_scim" "lc_cloud" {
-  name = "lc-cloud-scim"
-  url  = "https://keystone.lc-cloud.example.internal/v3/OS-SCIM/v2"
-  token = var.lc_cloud_scim_token
-
-  property_mappings       = data.authentik_property_mapping_provider_scim.all.ids
-  property_mappings_group = data.authentik_property_mapping_provider_scim.all_groups.ids
-
-  # 同期対象: all-members グループ配下のユーザー
-  filter_group = authentik_group.all_members.pk
-}
-
-resource "authentik_application" "lc_cloud_scim" {
-  name              = "LC-Cloud SCIM"
-  slug              = "lc-cloud-scim"
-  protocol_provider = authentik_provider_scim.lc_cloud.id
-}
-
-data "authentik_property_mapping_provider_scim" "all" {
-  managed_list = [
-    "goauthentik.io/providers/scim/user",
-  ]
-}
-
-data "authentik_property_mapping_provider_scim" "all_groups" {
-  managed_list = [
-    "goauthentik.io/providers/scim/group",
-  ]
-}
+```text
+ユーザーが LC-Cloud にアクセス
+  → Keystone が Authentik（OIDC）にリダイレクト
+  → Authentik で認証完了
+  → Keystone が Authentik のグループ情報を受け取り、
+    federation mapping でプロジェクトロールを自動付与
 ```
+
+Keystone 側では federation mapping を設定します（Terraform 管理対象外・OpenStack 管理者が設定）。
+
+```text
+# Keystone federation mapping の例
+Authentik グループ "team-web" → Keystone プロジェクト "web" の member ロール
+Authentik グループ "all-members" → 全プロジェクトの reader ロール
+```
+
+`providers/lc_cloud.tf` の OIDC プロバイダが認証の入り口を担います（前セクション参照）。
 
 ---
 

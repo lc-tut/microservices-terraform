@@ -26,8 +26,8 @@ Terraform が作成するリソース:
 ```hcl
 # terraform/catalog/teams/_template/outputs.tf
 output "organization_id" {
-  description = "LC-Cloud Organization ID（catalog/projects/ が参照する）"
-  value       = lc_cloud_organization.this.id
+  description = "LC-Cloud Project ID（catalog/projects/ が参照する）"
+  value       = module.org.project_id
 }
 
 output "authentik_group_id" {
@@ -41,9 +41,15 @@ resource "authentik_group" "this" {
   name         = var.team_name
   is_superuser = false
 }
+```
 
-resource "lc_cloud_organization" "this" {
-  name = var.team_name
+```hcl
+# terraform/catalog/teams/_template/lc_cloud.tf
+# modules/lc-cloud-organization/ が OpenStack Project + デフォルトクォータを作成する
+module "org" {
+  source     = "../../../modules/lc-cloud-organization"
+  name       = var.team_name
+  quota_tier = "default"  # small / medium / large
 }
 ```
 
