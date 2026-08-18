@@ -1,0 +1,12 @@
+clouds:
+  # ローカル OpenStack (GK41) — Application Credential で認証
+  # このファイルを local/clouds.yaml にコピーして認証情報を入力する
+  # local/clouds.yaml は .gitignore 済み（コミットしないこと）
+  gk41-poc:
+    auth:
+      auth_url: http://192.168.1.7/identity/
+      application_credential_id: ""
+      application_credential_secret: ""
+    auth_type: v3applicationcredential
+    region_name: RegionOne
+    interface: public

@@ -52,6 +52,7 @@ terraform/local-override.tf
 # ローカル開発環境の秘密情報
 local/authentik/.env
 local/.env
+local/clouds.yaml
 
 # SOPS 復号後の平文（絶対に含めない）
 *.dec

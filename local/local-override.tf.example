@@ -3,13 +3,9 @@
 # 本番環境では削除すること（.gitignore 済み）
 
 provider "openstack" {
-  auth_url    = "http://192.168.x.x/identity"  # DevStack VM の IP に変更
-  user_name   = "admin"
-  password    = "secret"
-  tenant_name = "admin"
-  domain_name = "Default"
-  region      = "RegionOne"
-  insecure    = true
+  # local/clouds.yaml の cloud 名を指定する（認証情報はそちらで管理）
+  # ~/.config/openstack/clouds.yaml でも可
+  cloud = "gk41-poc"
 }
 
 provider "authentik" {
