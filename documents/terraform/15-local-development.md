@@ -474,17 +474,32 @@ rm terraform/local-override.tf
 
 ---
 
-## 8. アイドル自動停止のセットアップ
+## 8. アイドル自動停止
 
-GCP VM は起動しっぱなしにするとコストがかかるため、作業 PC（Windows）が
-**無操作 30 分**、または**スリープに入った**ことを検知して自動停止する
-仕組みを `local/gcp-devstack/windows-autostop/` に用意しています。
+### VM 側（メイン）
 
-自動監視（タスクスケジューラ）は Windows ネイティブ実装のみで、WSL には
-依存しません（スリープ直前に WSL の軽量VMが動いていない可能性があるため）。
-手動の起動/停止は Windows・WSL どちらのシェルからでも同じ感覚で使えます。
+GCP VM には起動時から **idle-shutdown** systemd タイマーが有効になっており、
+**IAP トンネル（SSH 接続）が 30 分間途絶えると VM 自身がシャットダウン**します。
+`bootstrap.sh` が初回起動時に `/usr/local/bin/idle-shutdown.sh` と
+`idle-shutdown.timer` をインストールするため、追加のセットアップは不要です。
 
-### セットアップ
+```bash
+# VM 上でタイマーの状態を確認する（SSH 接続中に実行）
+gcloud compute ssh devstack-harbor --tunnel-through-iap --zone=<zone> \
+  --command="systemctl status idle-shutdown.timer"
+
+# ログを確認する
+gcloud compute ssh devstack-harbor --tunnel-through-iap --zone=<zone> \
+  --command="journalctl -t idle-shutdown"
+```
+
+IAP トンネル（`start-tunnels.sh`）を閉じると SSH 接続が切れ、30 分後に
+VM が自動停止します。作業中はトンネルを開いたままにしてください。
+
+### PC 側（補助）
+
+PC がスリープした場合でもすぐに VM を止めたいときは
+`local/gcp-devstack/windows-autostop/` の Windows タスクスケジューラを使います。
 
 ```bash
 cp local/gcp-devstack/windows-autostop/config.env.example \
@@ -499,24 +514,13 @@ cd local\gcp-devstack\windows-autostop
 .\register-scheduled-tasks.ps1
 ```
 
-登録される 2 つのタスク:
-
 | タスク名 | トリガー | 動作 |
 | --- | --- | --- |
-| `GCPDevStackIdleCheck` | 10 分おき | 無操作 30 分を超えていたら VM を停止（主たる自動停止手段） |
-| `GCPDevStackSleepStop` | PC スリープ移行時 | 即座に VM を停止（補助手段。スリープ移行が速すぎて完了しない場合もあるためアイドル監視の方が確実） |
-
-### 確認・手動テスト
+| `GCPDevStackIdleCheck` | 10 分おき | 無操作 30 分を超えていたら VM を停止 |
+| `GCPDevStackSleepStop` | PC スリープ移行時 | 即座に VM を停止 |
 
 ```powershell
-schtasks /query /tn GCPDevStackIdleCheck
-schtasks /run /tn GCPDevStackIdleCheck    # 手動発火して動作確認
-schtasks /run /tn GCPDevStackSleepStop
-```
-
-### 削除
-
-```powershell
+# 削除
 schtasks /delete /tn GCPDevStackIdleCheck /f
 schtasks /delete /tn GCPDevStackSleepStop /f
 ```

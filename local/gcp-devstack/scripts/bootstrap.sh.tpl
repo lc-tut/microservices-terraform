@@ -99,5 +99,55 @@ sed -i "s/^harbor_admin_password:.*/harbor_admin_password: ${harbor_admin_passwo
 
 ./install.sh
 
+# --- アイドルシャットダウン（SSH 接続が途絶えたら自動停止） ---
+# IAP トンネルは SSH ベースのため、接続が N 分なければ誰も作業していないと判断する
+cat > /usr/local/bin/idle-shutdown.sh <<'IDLE_SCRIPT'
+#!/bin/bash
+# SSH 接続（IAP トンネル含む）が IDLE_MINUTES 分間なければシャットダウンする
+IDLE_MINUTES=30
+STAMP=/run/last-ssh-connection
+
+if ss -tn state established '( sport = :22 )' | grep -q ESTAB 2>/dev/null; then
+  touch "$STAMP"
+  exit 0
+fi
+
+[ -f "$STAMP" ] || { touch "$STAMP"; exit 0; }
+
+LAST=$(stat -c %Y "$STAMP")
+NOW=$(date +%s)
+IDLE=$(( NOW - LAST ))
+
+if [ "$IDLE" -ge $(( IDLE_MINUTES * 60 )) ]; then
+  logger -t idle-shutdown "No SSH for ${IDLE_MINUTES}m — shutting down"
+  systemctl poweroff
+fi
+IDLE_SCRIPT
+chmod +x /usr/local/bin/idle-shutdown.sh
+
+cat > /etc/systemd/system/idle-shutdown.service <<'EOF'
+[Unit]
+Description=Idle shutdown — stop VM when SSH has been absent for 30 min
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/idle-shutdown.sh
+EOF
+
+cat > /etc/systemd/system/idle-shutdown.timer <<'EOF'
+[Unit]
+Description=Run idle-shutdown check every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now idle-shutdown.timer
+
 touch "$MARKER"
 echo "[gcp-devstack] bootstrap complete"
