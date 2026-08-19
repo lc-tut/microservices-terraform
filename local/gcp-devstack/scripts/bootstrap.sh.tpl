@@ -119,7 +119,7 @@ NOW=$(date +%s)
 IDLE=$(( NOW - LAST ))
 
 if [ "$IDLE" -ge $(( IDLE_MINUTES * 60 )) ]; then
-  logger -t idle-shutdown "No SSH for ${IDLE_MINUTES}m — shutting down"
+  logger -t idle-shutdown "No SSH for $${IDLE_MINUTES}m — shutting down"
   systemctl poweroff
 fi
 IDLE_SCRIPT
