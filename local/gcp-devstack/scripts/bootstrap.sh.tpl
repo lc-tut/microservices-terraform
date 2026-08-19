@@ -90,12 +90,13 @@ tar xzf harbor-online-installer.tgz
 cd harbor
 
 cp harbor.yml.tmpl harbor.yml
-sed -i "s/^hostname:.*/hostname: ${external_ip}/" harbor.yml
+sed -i "s|^hostname:.*|hostname: ${external_ip}|" harbor.yml
 sed -i "s/^  port: 80\$/  port: 8080/" harbor.yml
 # https ブロックを丸ごとコメントアウト（TLS なしの平文 HTTP 運用にする。
 # ローカル開発用の Authentik / Vault と同じ方針）
 sed -i "/^https:/,/private_key:/s/^/#/" harbor.yml
-sed -i "s/^harbor_admin_password:.*/harbor_admin_password: ${harbor_admin_password}/" harbor.yml
+# パスワードに / が含まれる場合を考慮して | をデリミタに使う
+sed -i "s|^harbor_admin_password:.*|harbor_admin_password: ${harbor_admin_password}|" harbor.yml
 
 ./install.sh
 
