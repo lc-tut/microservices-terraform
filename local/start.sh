@@ -20,6 +20,26 @@ cd "$SCRIPT_DIR/authentik"
 docker compose up -d
 cd "$SCRIPT_DIR"
 
+echo "=== LocalStack 起動（S3 バックエンド） ==="
+docker start localstack 2>/dev/null || docker run -d \
+  --name localstack \
+  -p 4566:4566 \
+  -e SERVICES=s3 \
+  localstack/localstack
+
+# LocalStack の S3 が ready になるまで待つ（最大 30 秒）
+echo "  LocalStack 待機中..."
+for i in $(seq 1 15); do
+  if docker exec localstack awslocal s3 ls >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+# tfstate バケットが未作成なら作成
+docker exec localstack awslocal s3 mb s3://linuxclub-tfstate \
+  --region us-east-1 2>/dev/null || true
+echo "  tfstate バケット: s3://linuxclub-tfstate (LocalStack)"
+
 echo "=== kind クラスター確認 ==="
 kind get clusters 2>/dev/null | grep -q lc-local \
   || kind create cluster --name lc-local
@@ -28,6 +48,7 @@ echo ""
 echo "起動完了"
 echo "  Authentik : http://localhost:9000/if/flow/initial-setup/ (初回のみ)"
 echo "  Authentik : http://localhost:9000/if/admin/"
+echo "  LocalStack: http://localhost:4566  (S3 バックエンド)"
 echo "  K8s       : kubectl --context kind-lc-local"
 echo ""
 echo "OpenStack (DevStack) / Harbor は GCP VM 上で稼働（local/gcp-devstack/）:"

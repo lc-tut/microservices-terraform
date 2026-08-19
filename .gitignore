@@ -56,6 +56,7 @@ local/clouds.yaml
 local/gcp-devstack/windows-autostop/config.env
 local/.secrets
 local/.act.env
+.envrc
 
 # SOPS 復号後の平文（絶対に含めない）
 *.dec

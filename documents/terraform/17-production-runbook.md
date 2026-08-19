@@ -31,6 +31,9 @@ GitHub Organization → **Settings → Secrets and variables → Actions** で�
 | `LC_CLOUD_APP_CRED_SECRET` | OpenStack Application Credential Secret | 下記手順で取得 |
 | `SOPS_AGE_KEY` | age 秘密鍵 | `age-keygen` で生成 |
 | `HARBOR_ADMIN_PASSWORD` | Harbor 管理者パスワード | Phase 4 完了後に更新 |
+| `CEPH_RGW_ENDPOINT` | Ceph RGW の S3 エンドポイント URL | 例: `https://s3.lc-cloud.example.internal` |
+| `CEPH_ACCESS_KEY_ID` | Ceph RGW S3 アクセスキー | Ceph 管理者から取得 |
+| `CEPH_SECRET_ACCESS_KEY` | Ceph RGW S3 シークレットキー | Ceph 管理者から取得 |
 
 **admin Application Credential の作成:**
 

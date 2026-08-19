@@ -1,0 +1,17 @@
+# direnv 用環境変数ファイル
+# cp local/.envrc.example .envrc && direnv allow
+# または source local/.envrc.example でも可
+
+# ---- LocalStack S3 バックエンド ----
+# 本番では GitHub Secrets に登録した値が CI で自動設定される
+export AWS_ENDPOINT_URL_S3=http://localhost:4566
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+
+# ---- OpenStack（GCP DevStack、IAP トンネル起動後に有効） ----
+export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
+export OS_CLOUD=gcp-devstack
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1

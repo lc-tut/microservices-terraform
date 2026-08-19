@@ -112,6 +112,10 @@ jobs:
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          # S3 バックエンド（Ceph RGW）認証情報
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
@@ -239,6 +243,9 @@ jobs:
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -274,6 +281,9 @@ jobs:
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -309,6 +319,9 @@ jobs:
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -452,6 +465,9 @@ jobs:
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform plan -no-color 2>&1 | tee plan.txt

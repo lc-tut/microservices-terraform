@@ -1,0 +1,22 @@
+# backend.tf テンプレート — 各スタックにコピーして key を変える
+#
+# エンドポイントは環境変数で切り替え（コードは変更不要）:
+#   ローカル: AWS_ENDPOINT_URL_S3=http://localhost:4566
+#   本番:     AWS_ENDPOINT_URL_S3=https://rgw.lc-cloud.example.com
+#
+# 認証情報:
+#   ローカル: AWS_ACCESS_KEY_ID=test / AWS_SECRET_ACCESS_KEY=test
+#   本番:     AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY を GitHub Secrets に登録
+
+terraform {
+  backend "s3" {
+    bucket = "linuxclub-tfstate"
+    key    = "platform/github/terraform.tfstate"  # ← スタックごとに変更
+    region = "us-east-1"
+
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    force_path_style            = true
+  }
+}
