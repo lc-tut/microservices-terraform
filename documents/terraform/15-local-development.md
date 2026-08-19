@@ -5,6 +5,24 @@
 
 ---
 
+## 必要なツール
+
+| ツール | 用途 | インストール |
+| --- | --- | --- |
+| [gcloud CLI](https://cloud.google.com/sdk/docs/install) | GCP VM への IAP トンネル・SSH | Google Cloud SDK |
+| [Terraform](https://developer.hashicorp.com/terraform/install) | IaC 実行・GCP VM 構築 | `tfenv` 推奨 |
+| [Docker](https://docs.docker.com/engine/install/) + Compose | Authentik 起動・act ランナー | Docker Desktop または Engine |
+| [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) | ローカル K8s クラスター | `curl` でバイナリ取得 |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | K8s 操作 | gcloud components または単体 |
+| [openstack CLI](https://docs.openstack.org/python-openstackclient/latest/) | Application Credential 発行・動作確認 | `pip install python-openstackclient` |
+| [PySocks](https://pypi.org/project/PySocks/) | openstack CLI の SOCKS5 プロキシ対応 | `pip install pysocks` |
+| [act](https://github.com/nektos/act) | GitHub Actions ローカル実行 | Section 4 参照 |
+
+> **WSL2 の場合**: Docker Desktop（Windows 側）を WSL2 バックエンドで動かすか、
+> WSL2 内に Docker Engine を直接インストールしてください。
+
+---
+
 ## 構成概要
 
 ```text
