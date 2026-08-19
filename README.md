@@ -42,12 +42,29 @@ microservices-terraform/
 | 03 | [メンバー管理](documents/terraform/03-member-management.md) | 入会フロー・個人情報取り扱い・GitHub 連携 |
 | 04 | [IdP 設定](documents/terraform/04-idp.md) | Authentik Terraform 設定・enrollment flow・SCIM |
 | 05 | [プロジェクトライフサイクル](documents/terraform/05-project-lifecycle.md) | チーム・プロジェクト作成手順 |
-| 06 | [CI/CD](documents/terraform/06-cicd.md) | GitHub Actions plan/apply・Vault OIDC 認証 |
+| 06 | [CI/CD](documents/terraform/06-cicd.md) | GitHub Actions plan/apply・GitHub Secrets 認証 |
 | 07 | [クォータ](documents/terraform/07-quota.md) | LC-Cloud クォータティア定義 |
 | 08 | [請求アカウント](documents/terraform/08-billing.md) | 個人・チーム請求アカウント・予算管理 |
 | 09 | [コスト定義](documents/terraform/09-costs.md) | クレジット単価・CloudKitty 設定 |
 | 10 | [ロール・権限](documents/terraform/10-roles-and-permissions.md) | ロール定義・権限マトリクス・GitHub Teams |
 | 11 | [ワークスペース設定](documents/terraform/11-workspace-config.md) | project-config.yaml・Tier 3 の使い方 |
+| 12 | [OpenStack リソース](documents/terraform/12-openstack-resources.md) | Keystone・Nova・Neutron・Cinder 設定 |
+| 13 | [運用レイヤー](documents/terraform/13-operation-layers.md) | 運用責任分離・エスカレーションフロー |
+| 14 | [ミドルウェアアーキテクチャ](documents/terraform/14-middleware-architecture.md) | Authentik・Harbor 統合設計 |
+| 15 | [ローカル開発](documents/terraform/15-local-development.md) | ローカル環境構築・act による CI ローカル実行 |
+| 16 | [実装フェーズ](documents/terraform/16-implementation-phases.md) | フェーズ別構築順序・依存関係 |
+| 17 | [本番構築ランブック](documents/terraform/17-production-runbook.md) | 本番環境ゼロからの構築手順 |
+
+---
+
+## 環境構築
+
+目的に合わせて手順書を参照してください。
+
+| 目的 | 手順書 |
+| --- | --- |
+| **本番環境**をゼロから構築する | [17-production-runbook.md](documents/terraform/17-production-runbook.md) |
+| **ローカル開発環境**を立ち上げる | [15-local-development.md](documents/terraform/15-local-development.md) |
 
 ---
 
@@ -74,6 +91,29 @@ microservices-terraform/
 
 ---
 
+### ローカルで CI を動かす（act）
+
+GitHub Actions ワークフローを手元で実行するには
+[act](https://github.com/nektos/act) を使います。
+
+```bash
+# セットアップ（初回のみ）
+cp local/.secrets.example local/.secrets   # 値を入力する
+cp local/.act.env.example local/.act.env
+
+# plan ワークフローを実行
+act pull_request \
+  -W .github/workflows/plan.yml \
+  --matrix stack:terraform/catalog/teams/_template
+
+# modules-check を実行
+act pull_request -W .github/workflows/modules-check.yml
+```
+
+詳細は [15-local-development.md](documents/terraform/15-local-development.md) を参照してください。
+
+---
+
 ## 使用ツール
 
 | 用途 | ツール |
@@ -84,6 +124,7 @@ microservices-terraform/
 | IdP | Authentik（`goauthentik/terraform-provider-authentik`） |
 | コンテナレジストリ | Harbor |
 | CI/CD | GitHub Actions |
+| CI ローカル実行 | [act](https://github.com/nektos/act) |
 
 ---
 
