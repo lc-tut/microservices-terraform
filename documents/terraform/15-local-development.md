@@ -321,38 +321,7 @@ k8s-api の動作確認はこのクラスターを使います。
 
 ---
 
-## 4. Vault (dev モード)
-
-```bash
-# Docker で起動
-docker run -d \
-  --name vault-dev \
-  -p 8200:8200 \
-  -e VAULT_DEV_ROOT_TOKEN_ID=root \
-  -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
-  hashicorp/vault
-
-# KV シークレットエンジンを有効化
-export VAULT_ADDR=http://localhost:8200
-export VAULT_TOKEN=root
-vault secrets enable -path=kv -version=2 kv
-
-# 動作確認
-vault kv put kv/app-creds/test app-cred-id=dummy app-cred-secret=dummy
-vault kv get kv/app-creds/test
-```
-
-```hcl
-# terraform/local-override.tf に追記
-provider "vault" {
-  address = "http://localhost:8200"
-  token   = "root"
-}
-```
-
----
-
-## 5. GitHub Actions (act)
+## 4. GitHub Actions (act)
 
 GitHub Actions ワークフローをローカルで実行するために
 [act](https://github.com/nektos/act) を使います。
@@ -420,9 +389,9 @@ act pull_request \
 
 ---
 
-## 6. 全サービス起動
+## 5. 全サービス起動
 
-`local/start.sh` で Authentik・Vault・kind を一括起動できます。
+`local/start.sh` で Authentik・kind を一括起動できます。
 
 ```bash
 bash local/start.sh
@@ -433,7 +402,7 @@ bash local/start.sh
 
 ---
 
-## 7. 開発フロー
+## 6. 開発フロー
 
 ### Application Credential と Access Rules のテスト
 
@@ -474,7 +443,7 @@ terraform apply -var="team_name=test-team" -auto-approve
 
 ---
 
-## 8. ローカルと本番の切り替え
+## 7. ローカルと本番の切り替え
 
 `terraform/local-override.tf` は git 管理しません。
 本番では GitHub Secrets の認証情報を CI が使うため、このファイルを削除するだけで戻ります。
@@ -489,7 +458,7 @@ rm terraform/local-override.tf
 
 ---
 
-## 9. アイドル自動停止のセットアップ
+## 8. アイドル自動停止のセットアップ
 
 GCP VM は起動しっぱなしにするとコストがかかるため、作業 PC（Windows）が
 **無操作 30 分**、または**スリープに入った**ことを検知して自動停止する
@@ -545,7 +514,6 @@ schtasks /delete /tn GCPDevStackSleepStop /f
 - [clouds.yaml リファレンス](https://docs.openstack.org/python-openstackclient/latest/configuration/index.html)
 - [Authentik Docker Compose インストール](https://version-2025-4.goauthentik.io/docs/install-config/install/docker-compose)
 - [kind クイックスタート](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [Vault dev モード](https://developer.hashicorp.com/vault/docs/concepts/dev-server)
 - [DevStack](https://docs.openstack.org/devstack/latest/)
 - [Harbor インストールガイド](https://goharbor.io/docs/latest/install-config/)
 - [IAP で TCP 転送を使う](https://cloud.google.com/iap/docs/using-tcp-forwarding)

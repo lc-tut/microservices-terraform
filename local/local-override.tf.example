@@ -20,8 +20,3 @@ provider "authentik" {
   url   = "http://localhost:9000"
   token = ""  # Authentik 管理画面で生成したトークンを入れる
 }
-
-provider "vault" {
-  address = "http://localhost:8200"
-  token   = "root"
-}
