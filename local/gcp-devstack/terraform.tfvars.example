@@ -1,0 +1,12 @@
+# このファイルを terraform.tfvars にコピーして値を入力する
+# terraform.tfvars は .gitignore 済み（コミットしないこと）
+
+project_id = "<gcp-project-id>"
+# region / zone はデフォルト（us-central1 / us-central1-a）のままで良ければ省略可
+
+devstack_admin_password = "<openssl rand -base64 24 などで生成する>"
+harbor_admin_password   = "<openssl rand -base64 24 などで生成する>"
+
+# IAP トンネル (roles/iap.tunnelResourceAccessor) を許可するユーザー。
+# ここに指定しないと IAP トンネル (start-tunnels.sh) が使えない
+iap_tunnel_users = ["user:<your-email>@example.com"]

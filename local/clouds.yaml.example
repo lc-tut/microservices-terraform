@@ -1,10 +1,14 @@
 clouds:
-  # ローカル OpenStack (GK41) — Application Credential で認証
+  # GCP 上の DevStack (local/gcp-devstack/) — Application Credential で認証
+  # ファイアウォールが IAP レンジのみ許可のため、事前に
+  # local/gcp-devstack/start-tunnels.sh で IAP トンネルを張っておくこと
+  # （auth_url は localhost:18080 のトンネル経由を指す）
+  #
   # このファイルを local/clouds.yaml にコピーして認証情報を入力する
   # local/clouds.yaml は .gitignore 済み（コミットしないこと）
-  gk41-poc:
+  gcp-devstack:
     auth:
-      auth_url: http://192.168.1.7/identity/
+      auth_url: http://localhost:18080/identity/
       application_credential_id: ""
       application_credential_secret: ""
     auth_type: v3applicationcredential

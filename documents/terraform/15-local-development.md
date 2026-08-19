@@ -9,7 +9,7 @@
 
 ```text
 ┌─────────────────────────────────────────────┐
-│  開発マシン (WSL2 / Linux / Mac)             │
+│  開発マシン (Windows + WSL2)                 │
 │                                             │
 │  Docker Compose                             │
 │    ├─ Authentik (IdP)   :9000              │
@@ -17,27 +17,78 @@
 │                                             │
 │  kind                                       │
 │    └─ ローカル K8s クラスター               │
+│                                             │
+│  gcp-devstack/windows-autostop              │
+│    └─ アイドル/スリープ検知で GCP VM を自動停止 │
 └─────────────────────────────────────────────┘
-
+              │ IAP トンネル (SSH / 80 / 8080)
+              ▼
 ┌─────────────────────────────────────────────┐
-│  ローカルサーバー (GK41)                     │
-│    └─ OpenStack          192.168.1.7        │
+│  GCP VM (local/gcp-devstack/, e2-standard-4) │
+│    OpenStack (DevStack)      :80             │
 │         Keystone  /identity                 │
-│         Nova      /compute/v2.1             │
-│         Neutron   /networking               │
-│         Glance    /image                    │
-│         Placement /placement                │
+│         Nova      /compute/v2.1              │
+│         Neutron   /networking                │
+│         Glance    /image                     │
+│         Placement /placement                 │
+│         Horizon   /                          │
+│    Harbor（最小構成）         :8080          │
 └─────────────────────────────────────────────┘
 ```
 
+以前は自宅サーバー GK41（`192.168.1.7`）で DevStack を稼働させていましたが、
+GK41 はデスクトップ用途とメモリを共有しておりリソースが逼迫していたため、
+DevStack + Harbor は GCP の専用 VM に移行しました。VM は作業時のみ起動し、
+使わないときは自動停止（後述）してコストを抑えます。
+
 ---
 
-## 1. OpenStack（ローカルサーバー GK41）
+## 1. OpenStack + Harbor（GCP VM）
 
-ローカルネットワーク上の GK41 サーバー（`192.168.1.7`）で
-OpenStack が稼働しています。
+`local/gcp-devstack/` の Terraform で GCP 上に DevStack（OpenStack）と
+Harbor（コンテナレジストリ、最小構成）を同居させた VM を構築します。
+ファイアウォールは IAP（Identity-Aware Proxy）レンジのみ許可しており、
+SSH・OpenStack API・Harbor いずれもインターネットには公開されません。
 
-### 接続設定（clouds.yaml）
+### VM の構築
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+
+cd local/gcp-devstack
+cp terraform.tfvars.example terraform.tfvars
+# project_id / devstack_admin_password / harbor_admin_password を入力する
+
+terraform init
+terraform plan
+terraform apply
+```
+
+初回起動時は VM の startup-script が Docker・DevStack・Harbor を
+自動インストールします（`stack.sh` に時間がかかるため 20〜40 分程度）。
+進捗は VM 上の `/var/log/gcp-devstack-bootstrap.log` で確認できます。
+
+```bash
+gcloud compute ssh $(terraform output -raw instance_name) \
+  --tunnel-through-iap --zone=$(terraform output -raw zone) \
+  --command="tail -f /var/log/gcp-devstack-bootstrap.log"
+```
+
+> IAP トンネルを使うには、自分の GCP アカウントに
+> `roles/iap.tunnelResourceAccessor` ロールが必要です。
+> `gcloud projects add-iam-policy-binding <project> --member=user:<you> --role=roles/iap.tunnelResourceAccessor`
+
+### 接続設定（IAP トンネル + clouds.yaml）
+
+ファイアウォールが IAP レンジのみ許可のため、ローカルから使う前に
+IAP トンネルを張ります。
+
+```bash
+./local/gcp-devstack/start-tunnels.sh
+# OpenStack API/Horizon: http://localhost:18080/
+# Harbor:                http://localhost:18081/
+```
 
 認証情報は `local/clouds.yaml` で管理します（`.gitignore` 済み）。
 
@@ -49,9 +100,9 @@ cp local/clouds.yaml.example local/clouds.yaml
 ```yaml
 # local/clouds.yaml
 clouds:
-  gk41-poc:
+  gcp-devstack:
     auth:
-      auth_url: http://192.168.1.7/identity/
+      auth_url: http://localhost:18080/identity/
       application_credential_id: "<app-cred-id>"
       application_credential_secret: "<app-cred-secret>"
     auth_type: v3applicationcredential
@@ -64,32 +115,101 @@ clouds:
 
 ```bash
 export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
-export OS_CLOUD=gk41-poc
+export OS_CLOUD=gcp-devstack
 ```
 
 > **Tips**: `.envrc`（direnv）に書いておくと自動で読み込まれます。
 
-### Application Credential の発行
+### SOCKS5 プロキシ（サービスカタログ越しのアクセスに必須）
 
-Terraform 用には `admin` ロールの Credential を発行します。
+DevStack のサービスカタログは `HOST_IP`（VM 内部プライベート IP、例:
+`10.10.0.2`）を全エンドポイントのベース URL として返します。
+`openstack token issue` のような `auth_url` に対する単発リクエストは
+IAP トンネル（`localhost:18080`）だけで動きますが、それ以外の
+ほぼ全ての操作（Application Credential 発行、`project list` /
+`network list` / `server list`、Terraform openstack プロバイダー等）は
+認証後にサービスカタログの URL（`http://10.10.0.2/...`）へ直接
+アクセスしようとします。`10.10.0.2` は GCP VPC 内プライベート IP で、
+ローカル PC からは到達不能（IAP トンネルは固定ポートの
+ポートフォワードのみで、任意 IP へのルーティングではない）なため、
+そのままだと接続が永久にハングします。
+
+対処として SSH の SOCKS5 プロキシ（IAP トンネル経由）を別途立てます。
 
 ```bash
-export OS_CLOUD=gk41-poc
+gcloud compute ssh devstack-harbor \
+  --tunnel-through-iap --zone=<zone> -- -N -D 1080 &
+```
+
+`openstack` / `terraform` 実行時は、`ALL_PROXY` で `10.10.0.2` 宛の
+通信だけ SOCKS5 プロキシに流し、`localhost`（IAP トンネル向け）は
+`NO_PROXY` で除外します（除外しないと `auth_url` への最初のリクエスト
+自体が SOCKS プロキシ越しになり、VM 自身から見た `localhost` を
+指してしまい失敗する）。
+
+```bash
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
+```
+
+`openstack` CLI の Python 環境に `PySocks`（`pip install pysocks`）が
+必要です。`requests` ライブラリが `socks5h://` を解釈できるようにする
+ためのパッケージで、無ければ `SOCKSHTTPConnectionPool ... Failed to
+establish a new connection` のようなエラーになります。
+
+### Application Credential の発行
+
+Terraform 用には `admin` ロールの Credential を発行します
+（IAP トンネル起動後、`OS_AUTH_URL` は Keystone の初期 admin 認証で
+一度だけパスワード認証する必要があります。パスワードは
+`terraform.tfvars` の `devstack_admin_password`）。
+
+この時点ではまだ `local/clouds.yaml` に Credential が無いため、
+admin のユーザー名/パスワードで直接認証する（前掲の SOCKS5 プロキシは
+必須）。
+
+```bash
+export OS_AUTH_URL=http://localhost:18080/identity/
+export OS_USERNAME=admin
+export OS_PASSWORD="<terraform.tfvars の devstack_admin_password>"
+export OS_PROJECT_NAME=admin
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_IDENTITY_API_VERSION=3
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
 
 openstack application credential create dev-terraform \
   --role admin \
   --description "ローカル開発用 Terraform 認証"
 ```
 
+出力された `id` / `secret` を `local/clouds.yaml` の `gcp-devstack`
+エントリーに書き込む。
+
 ### 動作確認
 
 ```bash
 export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
-export OS_CLOUD=gk41-poc
+export OS_CLOUD=gcp-devstack
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
 
 openstack project list
 openstack network list
 openstack server list
+```
+
+### Harbor へのログイン
+
+IAP トンネル起動後、`http://localhost:18081` に admin /
+`terraform.tfvars` の `harbor_admin_password` でログインできます。
+
+```bash
+docker login localhost:18081
 ```
 
 ### Terraform プロバイダー設定
@@ -103,18 +223,39 @@ cp local/local-override.tf.example terraform/local-override.tf
 # terraform/local-override.tf
 provider "openstack" {
   # OS_CLIENT_CONFIG_FILE / OS_CLOUD を読む
-  cloud = "gk41-poc"
+  cloud = "gcp-devstack"
 }
 ```
 
 ```bash
 export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
-export OS_CLOUD=gk41-poc
+export OS_CLOUD=gcp-devstack
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
 
 cd terraform/catalog/projects/_template
 terraform init -backend=false
 terraform plan -var="project_name=test-project" -var="team_name=web"
 ```
+
+### VM の起動・停止
+
+作業終了後は VM を止めてコストを抑えます（下記「アイドル自動停止」で
+自動化もできます）。
+
+```bash
+# WSL / Linux から
+./local/gcp-devstack/windows-autostop/start-vm.sh
+./local/gcp-devstack/windows-autostop/stop-vm.sh
+
+# Windows (PowerShell) から
+.\local\gcp-devstack\windows-autostop\start-vm.ps1
+.\local\gcp-devstack\windows-autostop\stop-vm.ps1
+```
+
+いずれも `local/gcp-devstack/windows-autostop/config.env` の設定を使います
+（`config.env.example` をコピーし `terraform output` の値を入力）。
 
 ---
 
@@ -211,7 +352,75 @@ provider "vault" {
 
 ---
 
-## 5. 全サービス起動
+## 5. GitHub Actions (act)
+
+GitHub Actions ワークフローをローカルで実行するために
+[act](https://github.com/nektos/act) を使います。
+`terraform validate` / `terraform fmt` / `terraform plan` を
+CI と同じ流れで確認できます。
+
+### インストール
+
+```bash
+# Linux (amd64)
+curl -s https://api.github.com/repos/nektos/act/releases/latest \
+  | grep "browser_download_url.*Linux_x86_64.tar.gz" \
+  | cut -d '"' -f 4 \
+  | xargs curl -Lo act.tar.gz
+tar xzf act.tar.gz act
+sudo mv act /usr/local/bin/act
+rm act.tar.gz
+act --version
+```
+
+### シークレットと環境変数の設定
+
+```bash
+cp local/.secrets.example local/.secrets
+cp local/.act.env.example local/.act.env
+```
+
+`local/.secrets` を編集して値を入力します。
+
+| キー | 値の取得元 |
+| --- | --- |
+| `AUTHENTIK_TOKEN` | ローカル Authentik 管理画面 → Directory → Tokens |
+| `LC_CLOUD_APP_CRED_ID` | `openstack application credential show <name>` |
+| `LC_CLOUD_APP_CRED_SECRET` | Application Credential 作成時に表示される secret |
+| `SOPS_AGE_KEY` | `age-keygen` で生成した秘密鍵（`AGE-SECRET-KEY-...`） |
+
+`local/.act.env` は変更不要です（`TF_CLI_ARGS_init=-backend=false` が設定済み）。
+
+リポジトリルートの `.actrc` に共通設定が書かれており、`act` 実行時に自動で読み込まれます。
+
+### 実行
+
+```bash
+# plan ワークフローをローカルで実行（特定スタックを対象に）
+act pull_request \
+  -W .github/workflows/plan.yml \
+  --matrix stack:terraform/catalog/teams/_template
+
+# modules-check ワークフローをローカルで実行
+act pull_request \
+  -W .github/workflows/modules-check.yml
+```
+
+初回実行時に Docker イメージ（`catthehacker/ubuntu:act-latest`、約 800 MB）を
+ダウンロードするため時間がかかります。
+
+### ローカル実行の制限事項
+
+| 項目 | 挙動 |
+| --- | --- |
+| PR コメント投稿 | GitHub API を呼ぶため失敗するが CI 結果には影響しない |
+| 変更ファイル検出 | `git diff` がローカルの状態を返す（origin/main との差分） |
+| S3 バックエンド | `TF_CLI_ARGS_init=-backend=false` で無効化済み |
+| `environment: production` ゲート | ローカルではスキップされる |
+
+---
+
+## 6. 全サービス起動
 
 `local/start.sh` で Authentik・Vault・kind を一括起動できます。
 
@@ -224,28 +433,31 @@ bash local/start.sh
 
 ---
 
-## 6. 開発フロー
+## 7. 開発フロー
 
 ### Application Credential と Access Rules のテスト
 
 ```bash
 export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
-export OS_CLOUD=gk41-poc
+export OS_CLOUD=gcp-devstack
+export ALL_PROXY=socks5h://localhost:1080
+export NO_PROXY=localhost,127.0.0.1
+export no_proxy=localhost,127.0.0.1
 
 # Access Rules 付きの Credential を作成
 openstack application credential create test-readonly \
   --access-rules '[{"method":"GET","path":"/v2.1/servers"}]'
 
-# 作成した Credential で認証（GET は通る）
+# 作成した Credential で認証（GET は通る。IAP トンネル起動済みが前提）
 OS_CLOUD="" \
-OS_AUTH_URL=http://192.168.1.7/identity/ \
+OS_AUTH_URL=http://localhost:18080/identity/ \
 OS_APPLICATION_CREDENTIAL_ID=<id> \
 OS_APPLICATION_CREDENTIAL_SECRET=<secret> \
 openstack server list
 
 # POST は Access Rules で弾かれることを確認（→ 403）
 OS_CLOUD="" \
-OS_AUTH_URL=http://192.168.1.7/identity/ \
+OS_AUTH_URL=http://localhost:18080/identity/ \
 OS_APPLICATION_CREDENTIAL_ID=<id> \
 OS_APPLICATION_CREDENTIAL_SECRET=<secret> \
 openstack server create ...
@@ -262,10 +474,10 @@ terraform apply -var="team_name=test-team" -auto-approve
 
 ---
 
-## 7. ローカルと本番の切り替え
+## 8. ローカルと本番の切り替え
 
 `terraform/local-override.tf` は git 管理しません。
-本番では Vault OIDC 認証を使うため、このファイルを削除するだけで戻ります。
+本番では GitHub Secrets の認証情報を CI が使うため、このファイルを削除するだけで戻ります。
 
 ```bash
 # ローカル開発
@@ -273,6 +485,55 @@ cp local/local-override.tf.example terraform/local-override.tf
 
 # 本番
 rm terraform/local-override.tf
+```
+
+---
+
+## 9. アイドル自動停止のセットアップ
+
+GCP VM は起動しっぱなしにするとコストがかかるため、作業 PC（Windows）が
+**無操作 30 分**、または**スリープに入った**ことを検知して自動停止する
+仕組みを `local/gcp-devstack/windows-autostop/` に用意しています。
+
+自動監視（タスクスケジューラ）は Windows ネイティブ実装のみで、WSL には
+依存しません（スリープ直前に WSL の軽量VMが動いていない可能性があるため）。
+手動の起動/停止は Windows・WSL どちらのシェルからでも同じ感覚で使えます。
+
+### セットアップ
+
+```bash
+cp local/gcp-devstack/windows-autostop/config.env.example \
+   local/gcp-devstack/windows-autostop/config.env
+# PROJECT_ID / ZONE / INSTANCE_NAME を terraform output の値で埋める
+```
+
+PowerShell を「管理者として実行」で開き、タスクを登録します。
+
+```powershell
+cd local\gcp-devstack\windows-autostop
+.\register-scheduled-tasks.ps1
+```
+
+登録される 2 つのタスク:
+
+| タスク名 | トリガー | 動作 |
+| --- | --- | --- |
+| `GCPDevStackIdleCheck` | 10 分おき | 無操作 30 分を超えていたら VM を停止（主たる自動停止手段） |
+| `GCPDevStackSleepStop` | PC スリープ移行時 | 即座に VM を停止（補助手段。スリープ移行が速すぎて完了しない場合もあるためアイドル監視の方が確実） |
+
+### 確認・手動テスト
+
+```powershell
+schtasks /query /tn GCPDevStackIdleCheck
+schtasks /run /tn GCPDevStackIdleCheck    # 手動発火して動作確認
+schtasks /run /tn GCPDevStackSleepStop
+```
+
+### 削除
+
+```powershell
+schtasks /delete /tn GCPDevStackIdleCheck /f
+schtasks /delete /tn GCPDevStackSleepStop /f
 ```
 
 ---
@@ -285,3 +546,6 @@ rm terraform/local-override.tf
 - [Authentik Docker Compose インストール](https://version-2025-4.goauthentik.io/docs/install-config/install/docker-compose)
 - [kind クイックスタート](https://kind.sigs.k8s.io/docs/user/quick-start/)
 - [Vault dev モード](https://developer.hashicorp.com/vault/docs/concepts/dev-server)
+- [DevStack](https://docs.openstack.org/devstack/latest/)
+- [Harbor インストールガイド](https://goharbor.io/docs/latest/install-config/)
+- [IAP で TCP 転送を使う](https://cloud.google.com/iap/docs/using-tcp-forwarding)

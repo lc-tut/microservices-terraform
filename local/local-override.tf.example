@@ -5,8 +5,16 @@
 provider "openstack" {
   # local/clouds.yaml の cloud 名を指定する（認証情報はそちらで管理）
   # ~/.config/openstack/clouds.yaml でも可
-  cloud = "gk41-poc"
+  # local/gcp-devstack/start-tunnels.sh で IAP トンネルを張ってから使うこと
+  cloud = "gcp-devstack"
 }
+
+# Harbor（local/gcp-devstack/ で構築。IAP トンネル経由: start-tunnels.sh 参照）
+# Terraform 上での実配線（provider "harbor" ブロック等）は
+# 16-implementation-phases.md Phase 4 の enable_harbor 実装時に行う
+# url:      http://localhost:18081
+# username: admin
+# password: <terraform.tfvars の harbor_admin_password>
 
 provider "authentik" {
   url   = "http://localhost:9000"

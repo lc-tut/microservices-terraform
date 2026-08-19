@@ -15,5 +15,15 @@
         "repo": "antonbabenko/agent-plugins"
       }
     }
+  },
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:gabrielcaiana.com)",
+      "WebFetch(domain:developer.hashicorp.com)",
+      "WebFetch(domain:kind.sigs.k8s.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.goauthentik.io)"
+    ]
   }
 }

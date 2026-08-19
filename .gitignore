@@ -53,6 +53,9 @@ terraform/local-override.tf
 local/authentik/.env
 local/.env
 local/clouds.yaml
+local/gcp-devstack/windows-autostop/config.env
+local/.secrets
+local/.act.env
 
 # SOPS 復号後の平文（絶対に含めない）
 *.dec
