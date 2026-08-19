@@ -7,7 +7,7 @@
 ## フェーズ概要
 
 ```text
-Phase 0  ローカル開発環境          🚧 GCP 移行中
+Phase 0  ローカル開発環境          ✅
 Phase 1  GitHub / CI 基盤
 Phase 2  Authentik（IdP）
 Phase 3  OpenStack platform
@@ -32,7 +32,7 @@ Phase 0
 
 ---
 
-## Phase 0 — ローカル開発環境 🚧
+## Phase 0 — ローカル開発環境 ✅
 
 **目標**: 本番環境なしで Terraform コードを開発・動作確認できる環境を整える。
 
@@ -40,13 +40,12 @@ Phase 0
 
 | 項目 | 状態 |
 | --- | --- |
-| GCP DevStack + Harbor VM（`local/gcp-devstack/`、Terraform管理） | 要セットアップ |
-| `local/clouds.yaml` + `OS_CLIENT_CONFIG_FILE` 設定（IAP トンネル経由） | 要セットアップ |
+| GCP DevStack + Harbor VM（`local/gcp-devstack/`、Terraform管理） | ✅ |
+| `local/clouds.yaml` + `OS_CLIENT_CONFIG_FILE` 設定（IAP トンネル経由） | ✅ |
 | Authentik Docker Compose (`local/authentik/`) | ✅ |
-| kind ローカル K8s クラスター | 要セットアップ |
-| Vault dev モード | 要セットアップ |
+| kind ローカル K8s クラスター | ✅ |
+| VM アイドル自動停止（idle-shutdown systemd タイマー） | ✅ |
 | `local/start.sh` で一括起動 | ✅ |
-| Windows 自動停止タスク（`windows-autostop/`） | 要セットアップ |
 
 詳細は `15-local-development.md` を参照。
 
