@@ -1,0 +1,105 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/platform/**'
+      - 'terraform/catalog/**'
+      - 'terraform/workspaces/**'
+      - 'terraform/modules/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.detect.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        run: |
+          stacks=$(git diff --name-only origin/main \
+            | grep -E '^terraform/(platform|catalog|workspaces)/' \
+            | awk -F'/' '
+                $2=="platform"  { print $1"/"$2"/"$3 }
+                $2=="catalog"   { print $1"/"$2"/"$3"/"$4 }
+                $2=="workspaces"{ print $1"/"$2"/"$3"/"$4 }
+              ' \
+            | sort -u \
+            | jq -R -s -c 'split("\n")[:-1]')
+          echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
+
+  plan:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.stacks != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.stacks) }}
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: SOPS 復号キー設定
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: Validate & Format Check
+        working-directory: ${{ matrix.stack }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+          terraform fmt -check
+
+      - name: Security Scan (tfsec)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ matrix.stack }}
+          soft_fail: true
+
+      - name: Plan
+        id: plan
+        working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
+        continue-on-error: true
+
+      - name: PR コメントに結果を投稿
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const plan = fs.readFileSync('${{ matrix.stack }}/plan.txt', 'utf8')
+            const status = '${{ steps.plan.outcome }}' === 'success' ? '✅' : '❌'
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### ${status} Plan: \`${{ matrix.stack }}\`\n\`\`\`\n${plan.slice(-60000)}\n\`\`\``
+            })
+
+      - name: Plan 失敗時に CI を失敗させる
+        if: steps.plan.outcome == 'failure'
+        run: exit 1

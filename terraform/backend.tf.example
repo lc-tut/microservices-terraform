@@ -1,22 +1,29 @@
 # backend.tf テンプレート — 各スタックにコピーして key を変える
 #
 # エンドポイントは環境変数で切り替え（コードは変更不要）:
-#   ローカル: AWS_ENDPOINT_URL_S3=http://localhost:4566
-#   本番:     AWS_ENDPOINT_URL_S3=https://rgw.lc-cloud.example.com
+#   ローカル: AWS_ENDPOINT_URL_S3=http://localhost:4566  (LocalStack)
+#   本番:     AWS_ENDPOINT_URL_S3=https://s3.lc-cloud.example.internal  (Ceph RGW)
 #
 # 認証情報:
 #   ローカル: AWS_ACCESS_KEY_ID=test / AWS_SECRET_ACCESS_KEY=test
-#   本番:     AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY を GitHub Secrets に登録
+#   本番:     CEPH_ACCESS_KEY_ID / CEPH_SECRET_ACCESS_KEY を GitHub Secrets に登録
+#
+# State キーのパス規則:
+#   terraform/platform/github/  → tfstate/terraform/platform/github/terraform.tfstate
+#   terraform/catalog/teams/web → tfstate/terraform/catalog/teams/web/terraform.tfstate
 
 terraform {
   backend "s3" {
     bucket = "linuxclub-tfstate"
-    key    = "platform/github/terraform.tfstate"  # ← スタックごとに変更
+    key    = "tfstate/<スタックパス>/terraform.tfstate"
     region = "us-east-1"
 
+    # Terraform 1.10+ の S3 ネイティブ state ロック（DynamoDB 不要）
+    use_lockfile = true
+
+    force_path_style            = true
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
-    force_path_style            = true
   }
 }

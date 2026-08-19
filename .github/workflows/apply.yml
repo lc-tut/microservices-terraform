@@ -1,0 +1,238 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/platform/**'
+      - 'terraform/catalog/**'
+      - 'terraform/workspaces/**'
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      phase1: ${{ steps.detect.outputs.phase1 }}
+      phase2: ${{ steps.detect.outputs.phase2 }}
+      phase3: ${{ steps.detect.outputs.phase3 }}
+      phase4: ${{ steps.detect.outputs.phase4 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        run: |
+          changed=$(git diff --name-only HEAD~1 HEAD)
+
+          phase1=$(echo "$changed" \
+            | grep -E '^terraform/platform/' \
+            | awk -F'/' '{print $1"/"$2"/"$3}' \
+            | sort -u \
+            | jq -R -s -c 'split("\n")[:-1]')
+
+          phase2=$(echo "$changed" \
+            | grep -E '^terraform/catalog/billing-accounts/' \
+            | awk -F'/' '{print $1"/"$2"/"$3"/"$4"/"$5}' \
+            | sort -u \
+            | jq -R -s -c 'split("\n")[:-1]')
+
+          phase3_raw=$(echo "$changed" \
+            | grep -E '^terraform/catalog/(teams|projects)/' \
+            | awk -F'/' '{print $1"/"$2"/"$3"/"$4}' \
+            | sort -u)
+          if echo "$changed" | grep -qE '^terraform/catalog/'; then
+            phase3_raw=$(printf '%s\nterraform/platform/github' "$phase3_raw")
+          fi
+          phase3=$(echo "$phase3_raw" | grep -v '^$' | sort -u \
+            | jq -R -s -c 'split("\n")[:-1]')
+
+          phase4=$(echo "$changed" \
+            | grep -E '^terraform/workspaces/' \
+            | awk -F'/' '{print $1"/"$2"/"$3"/"$4}' \
+            | sort -u \
+            | jq -R -s -c 'split("\n")[:-1]')
+
+          echo "phase1=$phase1" >> "$GITHUB_OUTPUT"
+          echo "phase2=$phase2" >> "$GITHUB_OUTPUT"
+          echo "phase3=$phase3" >> "$GITHUB_OUTPUT"
+          echo "phase4=$phase4" >> "$GITHUB_OUTPUT"
+
+  apply-phase1:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.phase1 != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.phase1) }}
+      fail-fast: false
+    concurrency:
+      group: apply-${{ matrix.stack }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: SOPS 復号キー設定
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: Apply
+        working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+  apply-phase2:
+    needs: [detect-changes, apply-phase1]
+    if: |
+      always() &&
+      (needs.apply-phase1.result == 'success' || needs.apply-phase1.result == 'skipped') &&
+      needs.detect-changes.outputs.phase2 != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.phase2) }}
+      fail-fast: false
+    concurrency:
+      group: apply-${{ matrix.stack }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: SOPS 復号キー設定
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: Apply
+        working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+  apply-phase3:
+    needs: [detect-changes, apply-phase2]
+    if: |
+      always() &&
+      (needs.apply-phase2.result == 'success' || needs.apply-phase2.result == 'skipped') &&
+      needs.detect-changes.outputs.phase3 != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.phase3) }}
+      fail-fast: false
+    concurrency:
+      group: apply-${{ matrix.stack }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: SOPS 復号キー設定
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: Apply
+        working-directory: ${{ matrix.stack }}
+        env:
+          TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
+          OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
+          OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+  apply-phase4:
+    needs: [detect-changes, apply-phase3]
+    if: |
+      always() &&
+      (needs.apply-phase3.result == 'success' || needs.apply-phase3.result == 'skipped') &&
+      needs.detect-changes.outputs.phase4 != '[]'
+    strategy:
+      matrix:
+        stack: ${{ fromJson(needs.detect-changes.outputs.phase4) }}
+      fail-fast: false
+    concurrency:
+      group: apply-${{ matrix.stack }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: プロジェクト名の導出
+        id: project
+        run: |
+          echo "name=$(echo '${{ matrix.stack }}' | awk -F'/' '{print $NF}')" \
+            >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: SOPS 復号キー設定
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: Apply（制限済み Application Credential を使用）
+        working-directory: ${{ matrix.stack }}
+        env:
+          OS_APPLICATION_CREDENTIAL_ID: >-
+            ${{ secrets[format('LC_CLOUD_APP_CRED_ID_{0}',
+              steps.project.outputs.name)] }}
+          OS_APPLICATION_CREDENTIAL_SECRET: >-
+            ${{ secrets[format('LC_CLOUD_APP_CRED_SECRET_{0}',
+              steps.project.outputs.name)] }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve

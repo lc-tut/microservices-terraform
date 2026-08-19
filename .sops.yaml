@@ -1,0 +1,7 @@
+creation_rules:
+  - path_regex: .*\.enc\.yaml$
+    age: >-
+      # TODO: age-keygen で生成した公開鍵を貼る
+      # age-keygen -o ~/.config/sops/age/lc-cloud.txt
+      # age-keygen -y ~/.config/sops/age/lc-cloud.txt  # 公開鍵のみ出力
+      # 例: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

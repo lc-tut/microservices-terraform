@@ -1,0 +1,33 @@
+name: Ensure @lc-tut/circle-admin in .codeowners
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/workspaces/**/.codeowners'
+
+jobs:
+  ensure-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.BOT_TOKEN }}
+
+      - run: |
+          changed=false
+          for f in $(git diff --name-only origin/${{ github.base_ref }} \
+                      | grep '\.codeowners$'); do
+            if ! grep -q '@lc-tut/circle-admin' "$f"; then
+              sed -i '1i @lc-tut/circle-admin' "$f"
+              changed=true
+            fi
+          done
+          if [ "$changed" = "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email \
+              "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: add @lc-tut/circle-admin to .codeowners"
+            git push
+          fi
