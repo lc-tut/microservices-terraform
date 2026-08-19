@@ -10,7 +10,7 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| OpenStack | GK41（192.168.1.7）または本番 OpenStack が稼働していること |
+| OpenStack | 本番 OpenStack が稼働していること |
 | admin Application Credential | `admin` ロールを持つ Application Credential が手元にあること |
 | GitHub Organization | `linuxclub` Organization が作成済みであること |
 | ドメイン | `lc-cloud.example.internal` が内部 DNS に登録されていること |
