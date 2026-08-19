@@ -1,7 +1,7 @@
 # backend.tf テンプレート — 各スタックにコピーして key を変える
 #
 # エンドポイントは環境変数で切り替え（コードは変更不要）:
-#   ローカル: AWS_ENDPOINT_URL_S3=http://localhost:4566  (LocalStack)
+#   ローカル: AWS_ENDPOINT_URL_S3=http://localhost:19000  (MinIO)
 #   本番:     AWS_ENDPOINT_URL_S3=https://s3.lc-cloud.example.internal  (Ceph RGW)
 #
 # 認証情報:
@@ -21,9 +21,10 @@ terraform {
     # Terraform 1.10+ の S3 ネイティブ state ロック（DynamoDB 不要）
     use_lockfile = true
 
-    force_path_style            = true
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
+    use_path_style               = true
+    skip_credentials_validation  = true
+    skip_metadata_api_check      = true
+    skip_region_validation       = true
+    skip_requesting_account_id   = true
   }
 }

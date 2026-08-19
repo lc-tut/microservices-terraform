@@ -20,25 +20,30 @@ cd "$SCRIPT_DIR/authentik"
 docker compose up -d
 cd "$SCRIPT_DIR"
 
-echo "=== LocalStack 起動（S3 バックエンド） ==="
-docker start localstack 2>/dev/null || docker run -d \
-  --name localstack \
-  -p 4566:4566 \
-  -e SERVICES=s3 \
-  localstack/localstack
+echo "=== MinIO 起動（S3 バックエンド） ==="
+docker start minio-local 2>/dev/null || docker run -d \
+  --name minio-local \
+  -p 19000:9000 \
+  -p 19001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio server /data --console-address ":9001"
 
-# LocalStack の S3 が ready になるまで待つ（最大 30 秒）
-echo "  LocalStack 待機中..."
+# MinIO が ready になるまで待つ（最大 30 秒）
+echo "  MinIO 待機中..."
 for i in $(seq 1 15); do
-  if docker exec localstack awslocal s3 ls >/dev/null 2>&1; then
+  if curl -sf http://localhost:19000/minio/health/live >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
 # tfstate バケットが未作成なら作成
-docker exec localstack awslocal s3 mb s3://linuxclub-tfstate \
+AWS_ACCESS_KEY_ID=minioadmin \
+AWS_SECRET_ACCESS_KEY=minioadmin \
+aws s3 mb s3://linuxclub-tfstate \
+  --endpoint-url http://localhost:19000 \
   --region us-east-1 2>/dev/null || true
-echo "  tfstate バケット: s3://linuxclub-tfstate (LocalStack)"
+echo "  tfstate バケット: s3://linuxclub-tfstate (MinIO)"
 
 echo "=== kind クラスター確認 ==="
 kind get clusters 2>/dev/null | grep -q lc-local \
@@ -48,7 +53,8 @@ echo ""
 echo "起動完了"
 echo "  Authentik : http://localhost:9000/if/flow/initial-setup/ (初回のみ)"
 echo "  Authentik : http://localhost:9000/if/admin/"
-echo "  LocalStack: http://localhost:4566  (S3 バックエンド)"
+echo "  MinIO     : http://localhost:19000  (S3 API)"
+echo "  MinIO UI  : http://localhost:19001  (コンソール — minioadmin/minioadmin)"
 echo "  K8s       : kubectl --context kind-lc-local"
 echo ""
 echo "OpenStack (DevStack) / Harbor は GCP VM 上で稼働（local/gcp-devstack/）:"
