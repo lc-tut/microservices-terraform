@@ -1,0 +1,139 @@
+name: Authentik Dispatch Handler
+
+on:
+  repository_dispatch:
+    types:
+      - authentik-enrollment-completed
+      - authentik-source_linked
+      - authentik-source_unlinked
+
+permissions:
+  contents: write
+
+jobs:
+  handle-enrollment:
+    if: github.event.action == 'authentik-enrollment-completed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: auto-gen-members.yaml を更新
+        env:
+          AUTHENTIK_TOKEN: ${{ secrets.AUTHENTIK_TOKEN }}
+          AUTHENTIK_URL: ${{ secrets.AUTHENTIK_URL }}
+          USERNAME: ${{ github.event.client_payload.username }}
+          DISPLAY_NAME: ${{ github.event.client_payload.display_name }}
+        run: |
+          # コホートディレクトリを検索してユーザーが属するコホートを特定
+          COHORT_DIR=$(grep -rl "\"$USERNAME\"" terraform/platform/members/active/ \
+            --include="auto-gen-members.yaml" 2>/dev/null | xargs dirname 2>/dev/null | head -1)
+          if [ -z "$COHORT_DIR" ]; then
+            COHORT_DIR=$(grep -rl "$USERNAME" terraform/platform/members/active/ \
+              --include="members.yaml" 2>/dev/null | xargs dirname 2>/dev/null | head -1)
+          fi
+          if [ -z "$COHORT_DIR" ]; then
+            echo "ERROR: $USERNAME のコホートが見つかりません"
+            exit 1
+          fi
+
+          FILE="$COHORT_DIR/auto-gen-members.yaml"
+          # ユーザー情報を Authentik API から取得
+          USER_INFO=$(curl -sf "$AUTHENTIK_URL/api/v3/core/users/?username=$USERNAME" \
+            -H "Authorization: Bearer $AUTHENTIK_TOKEN")
+          PK=$(echo "$USER_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin)['results'][0]['pk'])")
+          NAME=$(echo "$USER_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin)['results'][0]['name'])")
+
+          # YAML に追記（python で既存内容とマージ）
+          python3 - <<PYEOF
+          import yaml, os
+          path = "$FILE"
+          data = {}
+          if os.path.exists(path):
+              with open(path) as f:
+                  data = yaml.safe_load(f) or {}
+          data["$USERNAME"] = {"pk": $PK, "display_name": "$NAME"}
+          with open(path, "w") as f:
+              yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+          PYEOF
+
+      - name: コミット & プッシュ
+        run: |
+          git config user.name  "authentik-bot"
+          git config user.email "bot@lcn.hekuta.net"
+          git add terraform/platform/members/active/
+          git diff --cached --quiet || git commit -m "chore(members): enrollment 完了 - ${{ github.event.client_payload.username }} [skip ci]"
+          git push
+
+  handle-github-linked:
+    if: >
+      github.event.action == 'authentik-source_linked' &&
+      github.event.client_payload.source == 'github'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GitHub ユーザー名を解決して YAML 更新
+        env:
+          GH_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
+          AUTHENTIK_USERNAME: ${{ github.event.client_payload.username }}
+          GITHUB_IDENTIFIER: ${{ github.event.client_payload.github_identifier }}
+        run: |
+          # GitHub user ID → username
+          GITHUB_USERNAME=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/user/$GITHUB_IDENTIFIER" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['login'])")
+
+          FILE="terraform/platform/members/auto-gen-github-usernames.yaml"
+          python3 - <<PYEOF
+          import yaml, os
+          path = "$FILE"
+          data = {}
+          if os.path.exists(path):
+              with open(path) as f:
+                  data = yaml.safe_load(f) or {}
+          data["$AUTHENTIK_USERNAME"] = "$GITHUB_USERNAME"
+          with open(path, "w") as f:
+              yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+          PYEOF
+
+      - name: コミット & プッシュ
+        run: |
+          git config user.name  "authentik-bot"
+          git config user.email "bot@lcn.hekuta.net"
+          git add terraform/platform/members/auto-gen-github-usernames.yaml
+          git diff --cached --quiet || git commit -m "chore(members): GitHub 連携 - ${{ github.event.client_payload.username }} [skip ci]"
+          git push
+
+  handle-github-unlinked:
+    if: >
+      github.event.action == 'authentik-source_unlinked' &&
+      github.event.client_payload.source == 'github'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: YAML からエントリ削除
+        env:
+          AUTHENTIK_USERNAME: ${{ github.event.client_payload.username }}
+        run: |
+          FILE="terraform/platform/members/auto-gen-github-usernames.yaml"
+          python3 - <<PYEOF
+          import yaml, os
+          path = "$FILE"
+          if not os.path.exists(path):
+              exit(0)
+          with open(path) as f:
+              data = yaml.safe_load(f) or {}
+          data.pop("$AUTHENTIK_USERNAME", None)
+          with open(path, "w") as f:
+              yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+          PYEOF
+
+      - name: コミット & プッシュ
+        run: |
+          git config user.name  "authentik-bot"
+          git config user.email "bot@lcn.hekuta.net"
+          git add terraform/platform/members/auto-gen-github-usernames.yaml
+          git diff --cached --quiet || git commit -m "chore(members): GitHub 連携解除 - ${{ github.event.client_payload.username }} [skip ci]"
+          git push

@@ -60,6 +60,7 @@ local/.act.env
 
 # SOPS 復号後の平文（絶対に含めない）
 *.dec
+*_secrets.yaml
 
 # OS
 .DS_Store

@@ -9,6 +9,15 @@ export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_DEFAULT_REGION=us-east-1
 
+# ---- SMTP 設定（terraform/platform/idp/ のメール送信ステージ） ----
+# 未設定の場合は Authentik コンテナの AUTHENTIK_EMAIL__* 環境変数にフォールバックする
+# export TF_VAR_smtp_host=smtp.gmail.com
+# export TF_VAR_smtp_port=587
+# export TF_VAR_smtp_username=your-account@gmail.com
+# export TF_VAR_smtp_password=your-app-password
+# export TF_VAR_smtp_use_tls=true
+# export TF_VAR_smtp_from_address=noreply@example.com
+
 # ---- OpenStack（GCP DevStack、IAP トンネル起動後に有効） ----
 export OS_CLIENT_CONFIG_FILE="$(pwd)/local/clouds.yaml"
 export OS_CLOUD=gcp-devstack

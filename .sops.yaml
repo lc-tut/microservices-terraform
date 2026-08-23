@@ -1,4 +1,4 @@
 creation_rules:
-  - path_regex: .*\.enc\.yaml$
+  - path_regex: .*_secrets\.yaml\.enc$
     age: >-
       age13uux987qgspmjkyqqxszhhqshtvq5xjp2qhunc5gt6am4f3f2vcqmy657n

@@ -1,0 +1,4 @@
+# 自動生成 - 手動編集禁止
+# enrollment flow 完了時に Bot が書き込む
+# キー: member id, 値: {username, display_name}
+{}
