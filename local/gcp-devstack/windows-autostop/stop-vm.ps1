@@ -1,4 +1,4 @@
-# GCP の DevStack + Harbor VM を停止する。
+﻿# GCP の DevStack + Harbor VM を停止する。
 # 既に停止済み/停止中なら何もしない。
 . "$PSScriptRoot\Load-Config.ps1"
 

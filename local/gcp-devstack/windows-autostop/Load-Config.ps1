@@ -1,4 +1,4 @@
-# config.env (KEY="VALUE" 形式) を読み込み、環境変数として展開する。
+﻿# config.env (KEY="VALUE" 形式) を読み込み、環境変数として展開する。
 # stop-vm.ps1 / start-vm.ps1 / check-idle-and-stop.ps1 から dot-source して使う。
 
 $ConfigPath = Join-Path $PSScriptRoot "config.env"

@@ -1,4 +1,4 @@
-# GCP の DevStack + Harbor VM を起動する。
+﻿# GCP の DevStack + Harbor VM を起動する。
 . "$PSScriptRoot\Load-Config.ps1"
 
 $status = (gcloud compute instances describe $INSTANCE_NAME `

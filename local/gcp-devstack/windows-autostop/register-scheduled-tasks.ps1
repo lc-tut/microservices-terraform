@@ -1,4 +1,4 @@
-# GCP DevStack + Harbor VM のアイドル自動停止用タスクを Windows タスクスケジューラに登録する。
+﻿# GCP DevStack + Harbor VM のアイドル自動停止用タスクを Windows タスクスケジューラに登録する。
 # PowerShell を「管理者として実行」した状態で実行すること。
 #
 # 登録される2つのタスク:
