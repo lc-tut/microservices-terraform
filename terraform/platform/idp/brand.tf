@@ -4,8 +4,23 @@ data "authentik_brand" "default" {
   domain = "authentik-default"
 }
 
+locals {
+  # branding_logo/branding_favicon/flow の background は、Authentik 2025.12+ の
+  # File picker が外部URL（http(s)://...）をパススルー値として正式サポートしているため
+  # （文字種バリデーションはローカルアップロードパス用で、外部URLはスキップされる。
+  # authentik/admin/files/backends/passthrough.py 参照）、Terraform からアップロード
+  # せずに assets/ 配下の画像を raw.githubusercontent.com 経由でそのまま参照できる。
+  # このリポジトリは public のため、main に push 済みであれば誰でも読める。
+  # 未pushの状態だと 404 になる点に注意。
+  idp_assets_base_url = "https://raw.githubusercontent.com/lc-tut/microservices-terraform/main/terraform/platform/idp/assets"
+}
+
 resource "authentik_brand" "default" {
   domain        = data.authentik_brand.default.domain
   default       = true
   flow_recovery = authentik_flow.recovery.uuid
+
+  branding_title   = "LinuxClub"
+  branding_logo    = "${local.idp_assets_base_url}/linuxclub_wide_logo.png"
+  branding_favicon = "${local.idp_assets_base_url}/logo.png"
 }

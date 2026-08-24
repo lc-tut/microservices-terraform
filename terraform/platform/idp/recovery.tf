@@ -8,6 +8,7 @@ resource "authentik_flow" "recovery" {
   title       = "パスワードリセット"
   designation = "recovery"
   layout      = "stacked"
+  background  = "${local.idp_assets_base_url}/linuxclub_flow_background.jpg"
 }
 
 # ステージ 1: メールアドレスでユーザーを特定
@@ -26,12 +27,12 @@ resource "authentik_stage_email" "recovery_email" {
 
   # TF_VAR_smtp_host が設定されていれば明示的なSMTP設定を使用する
   use_global_settings = !local.smtp_configured
-  host                = local.smtp_configured ? var.smtp_host         : null
-  port                = local.smtp_configured ? var.smtp_port         : null
-  username            = local.smtp_configured ? var.smtp_username     : null
-  password            = local.smtp_configured ? var.smtp_password     : null
-  use_tls             = local.smtp_configured ? var.smtp_use_tls      : null
-  use_ssl             = local.smtp_configured ? var.smtp_use_ssl      : null
+  host                = local.smtp_configured ? var.smtp_host : null
+  port                = local.smtp_configured ? var.smtp_port : null
+  username            = local.smtp_configured ? var.smtp_username : null
+  password            = local.smtp_configured ? var.smtp_password : null
+  use_tls             = local.smtp_configured ? var.smtp_use_tls : null
+  use_ssl             = local.smtp_configured ? var.smtp_use_ssl : null
   from_address        = local.smtp_configured ? var.smtp_from_address : null
 }
 

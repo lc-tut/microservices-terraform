@@ -4,6 +4,7 @@ resource "authentik_flow" "enrollment" {
   title       = "LinuxClub メンバー登録"
   designation = "enrollment"
   layout      = "stacked"
+  background  = "${local.idp_assets_base_url}/linuxclub_flow_background.jpg"
 }
 
 resource "authentik_stage_invitation" "verify" {
@@ -97,4 +98,31 @@ resource "authentik_flow_stage_binding" "login" {
   target = authentik_flow.enrollment.uuid
   stage  = authentik_stage_user_login.login.id
   order  = 40
+}
+
+# ---- Stage 5: GitHub/Discord連携の推奨案内 ----
+# authentik_stage_source は Enterprise 限定のため、静的な案内 Stage で代替
+
+resource "authentik_stage_prompt_field" "recommend_connect" {
+  name      = "enrollment-field-recommend-connect"
+  field_key = "recommend_connect_info"
+  label     = "GitHub・Discord連携のご案内"
+  type      = "static"
+  sub_text  = <<-TEXT
+    GitHub・Discord アカウントの連携は任意ですが、連携しておくと
+    Organization への招待や OB/OG 向け Discord ロールの自動付与がスムーズになります。
+    後からいつでも「Connected Sources」画面（ユーザー設定）から連携できます。
+  TEXT
+  order     = 100
+}
+
+resource "authentik_stage_prompt" "recommend_connect" {
+  name   = "enrollment-recommend-connect"
+  fields = [authentik_stage_prompt_field.recommend_connect.id]
+}
+
+resource "authentik_flow_stage_binding" "recommend_connect" {
+  target = authentik_flow.enrollment.uuid
+  stage  = authentik_stage_prompt.recommend_connect.id
+  order  = 50
 }

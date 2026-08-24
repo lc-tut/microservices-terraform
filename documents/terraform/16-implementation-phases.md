@@ -116,6 +116,27 @@ Phase 0
 
 **成果物**: Authentik で入会フローが機能し、メンバーが username を自己設定できる状態。
 
+### Phase 2 拡張 — メンバーライフサイクル（卒業・OB/OG・年次継続）✅
+
+設計は `documents/authentik/`、実装はローカル Authentik（`local/authentik/`）で動作確認済み。
+
+- `active` / `ob-og` / `alumni` の3層モデル。`ob-og`/`alumni` は Git 上で匿名化
+  （`lcn_xxxxxx` 以外の本人特定情報を暗号化）
+- 年次継続確認フロー（`annual_renewal.tf`）: Q1（全員）・Q2（卒業年度コホート: OB/OG・連絡不要・留年）を
+  `radio-button-group` の実選択肢として実装。`placeholder_expression` を使った choices の与え方、
+  `re_evaluate_policies` による Q2 回答後の Stage 再評価など、実機検証で判明した Authentik の
+  挙動を反映済み
+- 本名・個人連絡先登録（`policy_contact_info.tf`）: 大学ドメイン拒否・電話番号形式バリデーション
+- `lcn_id` / `grad_year` を Authentik user attribute として明示的に保持
+- GitHub Org: `ob-og` / `alumni` 専用チームを新設（`terraform/platform/github/teams.tf`）。
+  Org からは削除せず、所属チーム切り替えでアクセスを絞る
+- enrollment に GitHub/Discord 連携の推奨案内 Stage を追加（`authentik_stage_source` は
+  Enterprise 限定と確認済みのため、静的案内 Stage で代替）
+- Brand（ロゴ・favicon・背景画像）を `assets/` 配下の画像から raw.githubusercontent.com 経由で設定
+
+**未実装（別途）**: Discord Bot 本体・`provider_discord_source.tf`（変数の口だけ用意済み）。
+`stage_configuration` フローをログイン中に自動で割り込ませる配線方法は未確定。
+
 ---
 
 ## Phase 3 — OpenStack platform
@@ -337,7 +358,33 @@ terraform apply
 
 ### 🟡 保留中
 
-**[P5] CloudKitty の有無**
+*保留中の項目はありません。*
 
-billing モジュールの実装方針は CloudKitty の構築方針が決まり次第更新する。
-それまで `Phase 6` の billing/ モジュールの実装は後回しにする。
+---
+
+### ✅ 追加解決済み
+
+**[P5] CloudKitty の導入方針 → restapi プロバイダーで IaC 管理**
+
+CloudKitty を OpenStack DevStack に追加し、Hashmap ルール（フレーバー別単価・ボリュームタイプ別単価・段階割引）を
+`Mastercard/terraform-provider-restapi` で管理する方針に決定。
+
+- **API**: Hashmap エンドポイントは CRUD が REST で完結しており、IaC 管理に適している
+- **プロバイダー**: `restapi` + `id_attribute` のドット記法（例: `mapping.mapping_id`）で対応可能
+- **UPDATE 問題**: CloudKitty の PUT が 302 を返すため、`force_new` を使って destroy → create で回避する
+- **モジュール化**: `modules/cloudkitty-service` として `service → field → mappings` を抽象化し、`for_each` でルール一覧を渡す設計
+
+```hcl
+module "compute_pricing" {
+  source       = "./modules/cloudkitty-service"
+  service_name = "compute"
+  field_name   = "flavor_id"
+  mappings = {
+    "m1.tiny"   = { cost = "0.005", type = "flat" }
+    "m1.small"  = { cost = "0.01",  type = "flat" }
+    "m1.medium" = { cost = "0.02",  type = "flat" }
+  }
+}
+```
+
+実装タイミング: Phase 3（OpenStack platform）の一部として `terraform/platform/cloudkitty/` に追加予定。

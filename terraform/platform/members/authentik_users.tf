@@ -1,14 +1,34 @@
+# all-members / ob-og は terraform/platform/idp/ 側の別スタックが所有するため data source で参照
+data "authentik_group" "all_members" {
+  name = "all-members"
+}
+
+data "authentik_group" "ob_og" {
+  name = "ob-og"
+}
+
 resource "authentik_user" "members" {
   for_each = local.members_by_id
 
   # username・name は enrollment 後にメンバー自身が変更する → drift を無視
-  username  = each.key
-  name      = each.key
-  email     = local.secrets[each.key].email
-  is_active = false
+  username = each.key
+  name     = each.key
+  email    = local.secrets[each.key].email
+
+  # active は既存通り false のまま維持（is_active の既存挙動には手を入れない）。
+  # alumni は連絡不要という意思表示のため false
+  is_active = each.value.status == "ob-og" ? true : false
+
+  groups = (
+    each.value.status == "ob-og" ? [data.authentik_group.ob_og.id] :
+    each.value.status == "alumni" ? [] :
+    [data.authentik_group.all_members.id]
+  )
 
   attributes = jsonencode({
     student_id = local.secrets[each.key].student_id
+    lcn_id     = each.key             # email 書き換え後も辿れる不変の識別子
+    grad_year  = each.value.grad_year # フォルダ移動のたびに再計算される
   })
 
   lifecycle {
@@ -17,10 +37,9 @@ resource "authentik_user" "members" {
   }
 }
 
-# ユーザー作成後にリカバリーメールを送信する
-# メンバーの大学メールに「アカウントが作成されました。こちらから設定してください」が届く
+# ユーザー作成後にリカバリーメールを送信する（active のみ。ob-og は設定済みのため対象外）
 resource "null_resource" "send_enrollment_email" {
-  for_each = local.members_by_id
+  for_each = { for id, m in local.members_by_id : id => m if m.status == "active" }
 
   triggers = {
     user_pk = authentik_user.members[each.key].id

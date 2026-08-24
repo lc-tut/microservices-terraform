@@ -54,6 +54,7 @@ local/authentik/.env
 local/.env
 local/clouds.yaml
 local/gcp-devstack/windows-autostop/config.env
+local/gcp-devstack/windows-autostop/*.vbs
 local/.secrets
 local/.act.env
 .envrc
@@ -61,6 +62,10 @@ local/.act.env
 # SOPS 復号後の平文（絶対に含めない）
 *.dec
 *_secrets.yaml
+# ob-og/alumni は auto-gen-*.yaml も暗号化対象（卒業後の匿名化）。復号後の平文を除外
+# active/ 配下の同名ファイルは平文のまま管理するのでここでは無視しない
+terraform/platform/members/ob-og/**/auto-gen-*.yaml
+terraform/platform/members/alumni/**/auto-gen-*.yaml
 
 # OS
 .DS_Store

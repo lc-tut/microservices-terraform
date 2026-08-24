@@ -2,3 +2,7 @@ creation_rules:
   - path_regex: .*_secrets\.yaml\.enc$
     age: >-
       age13uux987qgspmjkyqqxszhhqshtvq5xjp2qhunc5gt6am4f3f2vcqmy657n
+  # ob-og/alumni 配下の auto-gen-*.yaml.enc（卒業後の匿名化。documents/authentik/02-membership-lifecycle.md）
+  - path_regex: ^terraform/platform/members/(ob-og|alumni)/.*\.yaml\.enc$
+    age: >-
+      age13uux987qgspmjkyqqxszhhqshtvq5xjp2qhunc5gt6am4f3f2vcqmy657n

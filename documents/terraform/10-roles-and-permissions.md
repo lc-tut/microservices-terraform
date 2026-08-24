@@ -20,7 +20,14 @@
 | **lc-cloud-platform** | `@org/lc-cloud-platform` | Terraform・Authentik・GitHub 担当。プラットフォーム・モジュール・CI/CD 管理 |
 | **team-lead** | `@org/<team>-lead` | チームリード。自チームの catalog/ 承認・workspaces/ 自己完結 |
 | **member** | GitHub Organization メンバー | PR を提出できる。承認権限は CODEOWNERS 次第 |
-| **alumni** | GitHub Organization 外 | 退会済み。リポジトリへのアクセスなし |
+| **ob-og** | `@org/ob-og`（Organization メンバーのまま） | 卒業後も連絡可な OB/OG。承認・書き込み権限なし。リポジトリへの直接コミット不可 |
+| **alumni** | `@org/alumni`（Organization メンバーのまま） | 連絡不要/無回答で退会したメンバー。承認・書き込み権限なし |
+
+> `ob-og` / `alumni` は GitHub Organization から**削除しません**（GitHub の仕様上、
+> Org から削除された人はどの Team にも所属できないため）。実質的なアクセス制御は
+> 「`ob-og`/`alumni` チームには一切の repository 権限を紐づけない」ことで行います。
+> 詳細は [`../authentik/02-membership-lifecycle.md`](../authentik/02-membership-lifecycle.md)
+> の「GitHub Org: `ob-og` / `alumni` それぞれに専用チームを作る」参照。
 
 ### GitHub Teams 構成
 
@@ -33,6 +40,8 @@ org/
 ├── all-leads             # 全チームリードの集合（Tier 3 デフォルト承認者）
 ├── infra-lead            # infra チームのリード（複数人推奨）
 ├── web-lead              # web チームのリード（複数人推奨）
+├── ob-og                 # 卒業後も連絡可な OB/OG（repository 権限なし）
+├── alumni                # 退会済みメンバー（repository 権限なし）
 └── （チームごとに追加）
 ```
 
@@ -57,6 +66,9 @@ org/
 | `workspaces/<name>/` | ✅ | ❌ | ❌ | ❌ | CODEOWNERS 次第 | CODEOWNERS 次第 |
 
 > `workspaces/<name>/` は CODEOWNERS に含まれていれば ✅、含まれていなければ [PR] として CODEOWNERS オーナーの承認が必要です。
+>
+> `ob-og` / `alumni` はこの表に列を設けていません。どのパスに対しても承認・書き込み権限を
+> 持たない（すべて ❌ 相当）ためです。
 
 ---
 
@@ -325,13 +337,18 @@ GitHub の仕様上、PR 作成者は自分の CODEOWNERS 承認をカウント�
    → terraform-provider-codeowners が .github/CODEOWNERS を自動更新
 ```
 
-### メンバーの退会（alumni 化）
+### メンバーの卒業・退会（ob-og / alumni 化）
 
 ```text
-1. terraform/platform/members/ で active → alumni に移動
-2. GitHub Organization メンバーシップを削除
-   → CODEOWNERS の個人エントリは無効化される（GitHub が Organization 外のユーザーを無視）
-3. .github/CODEOWNERS から該当エントリを削除する PR を合わせて提出
+1. terraform/platform/members/ で active → ob-og または alumni に移動
+2. GitHub Organization メンバーシップは維持したまま、
+   github_team_membership を ob-og / alumni チームへ差し替える
+   （circle-admin・tech-lead 等の元のチームからは自動的に外れる。
+   Organization からは削除しない — Org 外だとどの Team にも所属できないため）
+3. Tier 2/3 の CODEOWNERS に @alice のような個人名で登録されていた場合は、
+   該当エントリを削除する PR を合わせて提出する
+   （チーム参照のエントリ側は ob-og/alumni チームに repository 権限が無いため
+   自動的に実質無効化されるが、個人名の直接エントリは明示的に消さないと残ってしまう）
 ```
 
 ---

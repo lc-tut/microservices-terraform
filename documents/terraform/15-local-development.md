@@ -519,6 +519,11 @@ cd local\gcp-devstack\windows-autostop
 | `GCPDevStackIdleCheck` | 10 分おき | 無操作 30 分を超えていたら VM を停止 |
 | `GCPDevStackSleepStop` | PC スリープ移行時 | 即座に VM を停止 |
 
+タスクは VBScript の隠しランチャー経由で PowerShell を起動するため、
+実行時にコンソールウィンドウが前面に出ることはありません。
+以前のバージョンで登録した場合は `register-scheduled-tasks.ps1` を再実行してください
+（`/f` で上書き登録されます）。
+
 ```powershell
 # 削除
 schtasks /delete /tn GCPDevStackIdleCheck /f

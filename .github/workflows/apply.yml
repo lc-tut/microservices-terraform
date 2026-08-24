@@ -87,6 +87,9 @@ jobs:
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
 
+      - name: メンバーファイル復号
+        run: scripts/decrypt-members.sh
+
       - name: Apply
         working-directory: ${{ matrix.stack }}
         env:
@@ -100,6 +103,8 @@ jobs:
           TF_VAR_smtp_from_address: ${{ secrets.SMTP_FROM_ADDRESS }}
           TF_VAR_github_oauth_client_id: ${{ secrets.GITHUB_OAUTH_CLIENT_ID }}
           TF_VAR_github_oauth_client_secret: ${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}
+          TF_VAR_discord_oauth_client_id: ${{ secrets.DISCORD_OAUTH_CLIENT_ID }}
+          TF_VAR_discord_oauth_client_secret: ${{ secrets.DISCORD_OAUTH_CLIENT_SECRET }}
           TF_VAR_webhook_secret: ${{ secrets.AUTHENTIK_WEBHOOK_SECRET }}
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
@@ -139,6 +144,9 @@ jobs:
         run: |
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: メンバーファイル復号
+        run: scripts/decrypt-members.sh
 
       - name: Apply
         working-directory: ${{ matrix.stack }}
@@ -182,6 +190,9 @@ jobs:
         run: |
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: メンバーファイル復号
+        run: scripts/decrypt-members.sh
 
       - name: Apply
         working-directory: ${{ matrix.stack }}
@@ -230,6 +241,9 @@ jobs:
         run: |
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+      - name: メンバーファイル復号
+        run: scripts/decrypt-members.sh
 
       - name: Apply（制限済み Application Credential を使用）
         working-directory: ${{ matrix.stack }}

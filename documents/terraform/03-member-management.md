@@ -40,13 +40,33 @@ platform/members/
 │       ├── members.yaml
 │       ├── members_secrets.yaml.enc
 │       └── auto-gen-members.yaml
-├── alumni/
+├── ob-og/
 │   └── grad-2025/
-│       ├── members.yaml
+│       ├── members.yaml               # role: "ob-og"（平文のまま。id・role は特定情報ではない）
 │       ├── members_secrets.yaml.enc
-│       └── auto-gen-members.yaml
-└── auto-gen-github-usernames.yaml    # Bot: username → github_username（OAuth 連携時）
+│       ├── auto-gen-members.yaml.enc      # 卒業後の匿名化により暗号化（下記参照）
+│       ├── auto-gen-github-usernames.yaml.enc
+│       └── auto-gen-discord-ids.yaml.enc
+├── alumni/
+│   └── grad-2024/
+│       ├── members.yaml               # role: "alumni"（平文のまま）
+│       ├── members_secrets.yaml.enc
+│       ├── auto-gen-members.yaml.enc
+│       ├── auto-gen-github-usernames.yaml.enc
+│       └── auto-gen-discord-ids.yaml.enc
+└── auto-gen-github-usernames.yaml    # Bot: username → github_username（OAuth 連携時。active のみ）
 ```
+
+`ob-og` / `alumni` では `auto-gen-*.yaml` が `.enc` になり、`auto-gen-github-usernames.yaml` /
+`auto-gen-discord-ids.yaml` もコホートフォルダ単位に分割されます（`active` のフラットファイルには
+残りません）。これは `role` を無視するのではなく明示的に上書きする設計、および
+「卒業後は `lcn_xxxxxx` 以外の本人特定情報を暗号化する」という匿名化方針の一部です。
+詳細は [`documents/authentik/02-membership-lifecycle.md`](../authentik/02-membership-lifecycle.md)
+の「卒業後の匿名化」を参照。
+
+> `active` / `ob-og` / `alumni` の3層構成です。卒業後も部活動に関わり続ける
+> OB/OG 向けの中間ステータスとして `ob-og/` を設けています。詳細は
+> [`documents/authentik/02-membership-lifecycle.md`](../authentik/02-membership-lifecycle.md) 参照。
 
 Bot ファイルは CODEOWNERS で Bot のみを承認者に指定し、人間のレビューなしで自動マージします。
 
@@ -122,6 +142,22 @@ lcn_3e1d9f40ab2c: "bob-dev"
 ---
 
 ## Terraform での参照方法
+
+> **注意（実装との乖離）**: 以下のコード例は当初の設計スケッチであり、
+> 実際の `terraform/platform/members/authentik_users.tf` とは一致しません。
+> 実装は `module "user"` ではなく `resource "authentik_user" "members"`
+> （`for_each = local.members_by_id`）を直接使っており、`authentik_invitation`
+> リソースも存在しません（Provider にそのリソース自体がありません。招待の実体は
+> `authentik_stage_invitation` というステージ設定のみです）。実際の enrollment は
+> 「`is_active = false` でユーザーを作成 → `null_resource` の `local-exec` から
+> Authentik API を curl で叩いてリカバリーメールを送信する」という異なる仕組みです。
+> また実コードは `email = local.secrets[each.key].email`（実メール）を直接渡しており、
+> このドキュメント冒頭の「email は暗号化ファイル以外には一切出ません」という方針とも
+> 食い違っています。この乖離自体は今回のセッションで作られたものではなく、
+> 既存のコードとドキュメントの間に元々あったものです。`documents/authentik/` の
+> 新しい設計（`lcn_id`・`grad_year` 属性の追加など）を実装する際は、
+> このスケッチではなく実ファイル `terraform/platform/members/authentik_users.tf` を
+> 起点に修正してください。
 
 ```hcl
 locals {
@@ -368,8 +404,35 @@ enrollment 完了後（username が確定してから）チームリードが追
 # catalog/teams/infra/members.yaml
 members:
   - alice
-  - bob
+  - lcn_3e1d9f40ab2c
 ```
+
+`username`（`alice`）と内部 ID（`lcn_3e1d9f40ab2c`）のどちらでも指定できます。
+username バリデーションポリシー（`policy_username.tf`）がアンダースコアを許可していないため、
+`lcn_` プレフィックス（アンダースコア込み）と衝突することはなく、`startswith(entry, "lcn_")` で
+機械的に判別できます。
+
+```hcl
+locals {
+  # id -> {username, display_name}（active コホートのみ。ob-og/alumni は
+  # auto-gen-members.yaml.enc が暗号化されているため、この逆引きの対象外）
+  username_to_id = {
+    for id, info in local.auto_gen : info.username => id
+  }
+
+  team_member_ids = [
+    for entry in yamldecode(file("${path.module}/members.yaml")).members :
+    startswith(entry, "lcn_") ? entry : local.username_to_id[entry]
+  ]
+}
+```
+
+**`ob-og` / `alumni` になったメンバーを username で指定することはサポートしません。**
+`documents/authentik/02-membership-lifecycle.md` の「卒業後の匿名化」により、
+これらのメンバーの username は暗号化されて Terraform からは読めなくなるため、
+`username_to_id` に該当キーが存在せず `terraform plan` がエラーで停止します
+（意図的な仕様です。フォールバックで復号を試みたりはしません。該当メンバーを
+チームに残す必要がある場合は `lcn_xxxxxx` で書き直してください）。
 
 ---
 
@@ -387,66 +450,20 @@ members:
 
 ### 卒業・退会時
 
-1. `active/<年度>/` から `alumni/<年度>/` へフォルダごと移動（削除しない）
+卒業時の移行（`ob-og` へ残すか `alumni` へ移すか）と、卒業と無関係な毎年の継続確認は
+[`documents/authentik/02-membership-lifecycle.md`](../authentik/02-membership-lifecycle.md)
+で詳細設計しています。概要のみ:
+
+1. 毎年3月、Google フォームで在籍中の全メンバーへ継続意思を確認
+1. 回答をもとに管理者が `active/<年度>/` を `ob-og/<年度>/` または `alumni/<年度>/` へ
+   フォルダごと移動（削除しない）
 1. PR → 管理者承認 → apply
-1. Authentik の `is_active = false` に変更、SCIM 連携で LC-Cloud アクセスも自動無効化
+1. Authentik の `is_active` / グループ割り当てが移動先フォルダに応じて更新される
 
 ### ロール変更
 
 1. `members.yaml` の `role` を変更
 1. PR → 管理者承認 → apply
-
----
-
-## 年度末確認フロー
-
-```text
-3月初旬 cron（LC-Cloud cronjob または GitHub Actions）
-  │
-  └─ active/grad-<今年>/ フォルダの存在を確認
-       │
-       └─ Authentik API: カスタムイベントを送信
-            │
-            └─ Authentik Notification Rule が発火
-                 └─ Discord で管理者グループに通知
-                      「grad-<今年> コホートの卒業確認をしてください」
-                           │
-              ┌────────────┴─────────────┐
-              │                          │
-         継続者あり                  全員卒業
-              │                          │
-         対応不要                    管理者が PR を作成
-         （grad-<今年> フォルダに    （active/grad-<今年>/ を
-           そのまま残す）              alumni/grad-<今年>/ に移動）
-              │                          │
-              └──────────┬───────────────┘
-                         │
-              継続者あり：翌年度末に再確認
-              全員卒業：管理者が承認 → apply
-```
-
-### Authentik 側の設定
-
-```hcl
-# terraform/platform/idp/providers/notification.tf
-resource "authentik_event_transport" "discord" {
-  name        = "graduation-review-discord"
-  mode        = "webhook_slack"
-  send_once   = false
-  webhook_url = "${var.discord_webhook_url}/slack"
-}
-
-resource "authentik_notification_rule" "graduation" {
-  name       = "graduation-review"
-  group      = data.authentik_group.circle_admin.id
-  transports = [authentik_event_transport.discord.id]
-  severity   = "notice"
-
-  conditions = jsonencode({
-    event_action = "custom_graduation_review"
-  })
-}
-```
 
 ---
 

@@ -20,6 +20,20 @@ variable "github_oauth_client_secret" {
   default   = ""
 }
 
+# Discord OAuth Source（任意連携）— 空文字のままにすると Source は作成されない
+# 発行元: https://discord.com/developers/teams/1358051551310123291/information
+# （サークルの Admin アカウントでアクセス可）
+variable "discord_oauth_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "discord_oauth_client_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # LC-Cloud OIDC プロバイダ — 空文字のままにするとプロバイダは作成されない
 variable "lc_cloud_oidc_client_id" {
   type    = string
@@ -49,6 +63,20 @@ variable "github_repo_owner" {
 variable "github_repo_name" {
   type    = string
   default = "microservices-terraform"
+}
+
+# ---- 年次継続確認 ----
+# 毎年3月の年次更新のたびに更新して apply する運用変数
+variable "renewal_cycle_year" {
+  type        = number
+  description = "今年度の継続確認サイクルの年度。renewal.year のスタンプに使う"
+  default     = 2027
+}
+
+variable "renewal_grad_year" {
+  type        = number
+  description = "今年度に卒業予定のコホート年度。Q2 の表示対象コホート判定に使う"
+  default     = 2027
 }
 
 # ---- SMTP（enrollment / recovery メール送信） ----
