@@ -8,7 +8,6 @@ resource "authentik_flow" "recovery" {
   title       = "パスワードリセット"
   designation = "recovery"
   layout      = "stacked"
-  background  = "${local.idp_assets_base_url}/linuxclub_flow_background.jpg"
 }
 
 # ステージ 1: メールアドレスでユーザーを特定

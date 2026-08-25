@@ -9,7 +9,6 @@ resource "authentik_flow" "annual_renewal" {
   title       = "継続確認"
   designation = "stage_configuration"
   layout      = "stacked"
-  background  = "${local.idp_assets_base_url}/linuxclub_flow_background.jpg"
 }
 
 # ---- Stage 1: Q1（全員向け継続確認） ----
@@ -96,6 +95,44 @@ resource "authentik_flow_stage_binding" "renewal_q2" {
 resource "authentik_policy_binding" "renewal_q2_gate" {
   target = authentik_flow_stage_binding.renewal_q2.id
   policy = authentik_policy_expression.is_graduating_cohort.id
+  order  = 0
+}
+
+# ---- Stage 2.5: メール確認（「継続する」または「留年する」の場合のみ） ----
+# recovery.tf の authentik_stage_email と同じパターン（local.smtp_configured を再利用）。
+# 大学メール（authentik_user.email）宛にリンクを送り、クリックでこの Stage を通過させる
+
+resource "authentik_stage_email" "renewal_email_verify" {
+  name                     = "renewal-email-verify"
+  activate_user_on_success = false
+  token_expiry             = "minutes=30"
+  subject                  = "LinuxClub 継続確認メールアドレス認証"
+  template                 = "email/account_confirmation.html"
+
+  use_global_settings = !local.smtp_configured
+  host                = local.smtp_configured ? var.smtp_host : null
+  port                = local.smtp_configured ? var.smtp_port : null
+  username            = local.smtp_configured ? var.smtp_username : null
+  password            = local.smtp_configured ? var.smtp_password : null
+  use_tls             = local.smtp_configured ? var.smtp_use_tls : null
+  use_ssl             = local.smtp_configured ? var.smtp_use_ssl : null
+  from_address        = local.smtp_configured ? var.smtp_from_address : null
+}
+
+resource "authentik_flow_stage_binding" "renewal_email_verify" {
+  target = authentik_flow.annual_renewal.uuid
+  stage  = authentik_stage_email.renewal_email_verify.id
+  order  = 25
+
+  # Q1/Q2 の回答（未回答時点では存在しない）を見るため、Stage 3 と同じ理由で
+  # プラン時点の一発評価ではなく実行時の再評価にする
+  evaluate_on_plan     = false
+  re_evaluate_policies = true
+}
+
+resource "authentik_policy_binding" "renewal_email_verify_gate" {
+  target = authentik_flow_stage_binding.renewal_email_verify.id
+  policy = authentik_policy_expression.needs_email_verify.id
   order  = 0
 }
 

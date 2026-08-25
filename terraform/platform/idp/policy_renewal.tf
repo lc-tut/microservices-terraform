@@ -29,6 +29,15 @@ resource "authentik_policy_expression" "chose_ob_og" {
   PYTHON
 }
 
+# 「継続する」(Q1) または「留年する」(Q2) の場合のみメール確認 Stage へ進める判定
+resource "authentik_policy_expression" "needs_email_verify" {
+  name       = "renewal-needs-email-verify"
+  expression = <<-PYTHON
+    attrs = request.context.get("prompt_data", {}).get("attributes", {})
+    return attrs.get("renewal_continue") == "continue" or attrs.get("renewal_choice") == "repeat-year"
+  PYTHON
+}
+
 # --- authentik_stage_prompt_field に choices 引数が無いため、
 #     type = "text" の自由入力 + validation_policies での許容値チェックで代替する ---
 

@@ -4,7 +4,6 @@ resource "authentik_flow" "enrollment" {
   title       = "LinuxClub メンバー登録"
   designation = "enrollment"
   layout      = "stacked"
-  background  = "${local.idp_assets_base_url}/linuxclub_flow_background.jpg"
 }
 
 resource "authentik_stage_invitation" "verify" {
