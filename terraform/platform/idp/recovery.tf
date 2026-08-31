@@ -215,3 +215,44 @@ resource "authentik_flow_stage_binding" "recovery_write" {
   stage  = authentik_stage_user_write.recovery_write.id
   order  = 40
 }
+
+# ステージ 6: GitHub/Discord連携の推奨案内（初回のみ。通常のパスワードリセットでは出さない）
+# authentik_stage_source は Enterprise 限定のため、静的な案内 Stage で代替。
+# 元は enrollment.tf（招待制の member-enrollment Flow）にあったが、そちらは
+# 実際の入会経路として使われていなかった（authentik_invitation を発行する仕組みが
+# どこにも無く、brand.flow_enrollment にも設定されていない）ため削除し、
+# 実際にメンバーが通るこちらの welcome フローへ移設した
+resource "authentik_stage_prompt_field" "recommend_connect" {
+  name      = "recovery-field-recommend-connect"
+  field_key = "recommend_connect_info"
+  label     = "GitHub・Discord連携のご案内"
+  type      = "static"
+  sub_text  = <<-TEXT
+    GitHub・Discord アカウントの連携は任意ですが、連携しておくと
+    Organization への招待や OB/OG 向け Discord ロールの自動付与がスムーズになります。
+    後からいつでも「Connected Sources」画面（ユーザー設定）から連携できます。
+  TEXT
+  order     = 100
+
+  # static 型フィールドは placeholder が送信値のデフォルトになる（画面上の
+  # プレースホルダーとしては使われない）。空文字のままだと送信時に
+  # "This field may not be blank." で弾かれるため、非空の値を入れておく
+  placeholder = "ok"
+}
+
+resource "authentik_stage_prompt" "recommend_connect" {
+  name   = "recovery-recommend-connect"
+  fields = [authentik_stage_prompt_field.recommend_connect.id]
+}
+
+resource "authentik_flow_stage_binding" "recommend_connect" {
+  target = authentik_flow.recovery.uuid
+  stage  = authentik_stage_prompt.recommend_connect.id
+  order  = 45
+}
+
+resource "authentik_policy_binding" "recommend_connect_gate" {
+  target = authentik_flow_stage_binding.recommend_connect.id
+  policy = authentik_policy_expression.needs_welcome_intro.id
+  order  = 0
+}

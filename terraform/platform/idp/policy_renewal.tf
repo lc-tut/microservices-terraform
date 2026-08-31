@@ -38,8 +38,9 @@ resource "authentik_policy_expression" "needs_email_verify" {
   PYTHON
 }
 
-# --- authentik_stage_prompt_field に choices 引数が無いため、
-#     type = "text" の自由入力 + validation_policies での許容値チェックで代替する ---
+# --- UI 上は radio-button-group（annual_renewal.tf 側で placeholder_expression により
+#     選択肢を提示）だが、直接 API を叩いて想定外の値を送信されるケースへの防御として、
+#     stage_prompt.validation_policies 側でも許容値をチェックする（defense in depth） ---
 
 resource "authentik_policy_expression" "q1_valid_answer" {
   name       = "renewal-q1-valid-answer"
