@@ -359,8 +359,17 @@ resource "authentik_policy_expression" "needs_renewal" {
 
 ## Terraform への影響
 
-**実装済み**（Discord Bot 本体・`provider_discord_source.tf` を除く）。以下は実装当時の計画メモ。
+**実装済み**（Discord Bot 本体を除く。`provider_discord_source.tf` はアカウント紐づけ用の
+OAuth Source としては実装済み）。以下は実装当時の計画メモ。
 実装時に判明した変更点は各所に反映済みですが、主なものを先に挙げておきます。
+
+> **未実装**: 上の「年次サイクル」節の図にある「次回ログイン時に renewal Stage へ自動で迂回する」
+> 部分は配線されていません。`policy_renewal.tf` の `needs_renewal` ポリシーは定義されているだけで、
+> どの `authentik_policy_binding` からも参照されていません。`annual-renewal` Flow
+> （`annual_renewal.tf`、`designation = "stage_configuration"`）自体（Q1/Q2・連絡先入力・
+> メール確認の各 Stage）は実装・実機検証済みですが、ログイン中に自動で割り込ませる仕組みは
+> 未確定のままです（詳細は `16-implementation-phases.md` の Phase 2 拡張節を参照）。
+> 現状はリンクを直接踏んでもらう運用を想定しています。
 
 - `alumni` も `active`/`ob-og` と同様に Terraform 管理対象にしました（下記「Terraform 管理対象外」の
   記述は誤りでした）。`authentik_user.members` は `lifecycle.prevent_destroy = true` のため、
@@ -373,8 +382,10 @@ resource "authentik_policy_expression" "needs_renewal" {
 ### `terraform/platform/idp/`
 
 - `authentik_group "ob_og"` を新設
-- `policy_renewal.tf`（新規）: 年次継続確認ポリシー・renewal 用 Prompt Stage・
-  LC-Cloud authorization flow へのバインディング
+- `policy_renewal.tf` / `annual_renewal.tf`（新規）: 年次継続確認ポリシー・
+  Q1/Q2・連絡先入力・メール確認の各 Stage を持つ独立した Flow（`annual-renewal`、
+  `stage_configuration` designation）として実装。ただし LC-Cloud の authorization flow
+  への束ね込み（ログイン時の自動迂回）は未実装（上記「未実装」欄参照）
 - `terraform/platform/members/authentik_users.tf` の `resource "authentik_user" "members"` にある
   既存の `attributes = jsonencode({ student_id = ... })` に `lcn_id = each.key`・
   `grad_year = <コホートフォルダ名から抽出した年度>` を追記する

@@ -1,82 +1,45 @@
-# 入会フォーム（既存・実装済み）
+# 入会フォーム
 
-**状態: 実装済み**（`terraform/platform/idp/enrollment.tf`）。設計は
-[`04-idp.md`](../../terraform/04-idp.md) の「入会フロー（enrollment flow）」に既にあります。
-このドキュメントは `forms/` 配下のフォーム一覧を完結させるための短いポインタです。
+**状態: 実装済み・実機検証済み**。ただし当初の設計（`authentik_invitation` を使った
+招待制の `member-enrollment` Flow）は実際には使われておらず、2026-08-31 に
+`terraform/platform/idp/enrollment.tf` ごと削除しました。理由と現在の実装は下記の通りです。
+
+## なぜ enrollment.tf を削除したか
+
+`enrollment.tf` は「招待コード検証 → username/表示名/パスワード入力 → ユーザー作成 → ログイン」
+という4ステージ構成の独立 Flow（`member-enrollment`）を定義していましたが、
+
+- この Flow を指す `authentik_invitation` リソースはリポジトリのどこにも存在しない
+- `authentik_brand.default.flow_enrollment` にも設定されていない
+
+ため、実際に新入会員がこの Flow を通る経路が存在しませんでした。
+
+実際に新入会員がたどっている経路は次の通りです（`terraform/platform/members/authentik_users.tf`・
+`terraform/platform/idp/recovery.tf`。詳細は
+[`02-membership-lifecycle.md`](../02-membership-lifecycle.md) と
+[`16-implementation-phases.md`](../../terraform/16-implementation-phases.md) の Phase 2 拡張節）。
+
+1. 管理者が `members_secrets.yaml.enc` に email・student_id を追加して apply
+2. Terraform が直接 `authentik_user` を作成（パスワード未設定＝`has_usable_password() == False`）
+3. 「LinuxClubへようこそ！アカウント設定のお願い」メールが送信される
+   （`member-recovery` Flow の welcome 分岐。`Accept-Language: ja` で日本語化済み）
+4. 本人がリンクを開く → ようこそ案内 → username 決定 → パスワード設定 →
+   GitHub/Discord連携のご案内 → 完了
 
 ## フィールド
 
 | フィールド | 型 | 必須 | 備考 |
 | --- | --- | --- | --- |
 | `username` | text | ✅ | LC-Cloud Keystone ID と紐づく。以降変更不可。ポリシーで形式検証 |
-| `name`（表示名） | text | ✅ | 本名ではなく自己申告のニックネーム的な表示名 |
 | `password` / `password_repeat` | password | ✅ | |
 
-招待コード検証（`authentik_stage_invitation`）→ 上記入力（`authentik_stage_prompt`）
-→ ユーザー作成（`authentik_stage_user_write`, `user_creation_mode = "always_create"`）
-→ ログイン、の4ステージ構成です。実装済みのため Terraform Provider 機能面の再検証は不要です。
+（表示名の自己設定ステージは無し。`name` は Terraform 側が `lcn_id` で初期設定し、
+本名は別途 `forms/03-contact-info.md` の `attributes.real_name` で扱う）
 
-`forms/03-contact-info.md` の「本名」フィールドは、ここで設定する「表示名」（`name`）とは
-別物として扱います（本名は法的な氏名、表示名は自己申告のニックネームでも構わない）。
+## GitHub・Discord連携のご案内 Stage
 
----
-
-## 追加提案: Discord/GitHub連携を推奨する Stage（未実装・設計）
-
-enrollment 完了直後（ログイン Stage の後）に、GitHub・Discord のアカウント連携を
-**任意だが推奨**として案内する Stage を追加します。
-
-### 実現方法の制約（要確認）
-
-理想は「今すぐこの場で連携ボタンを押せる」ことですが、Authentik の
-`authentik_stage_source`（Flow の途中でソース連携を行わせる Stage）は、
-`authentik_policy_event_matcher` の `app` 許可値一覧を確認したところ
-**`authentik.enterprise.stages.source` という Enterprise 名前空間にのみ存在し、
-無印の `authentik.stages.source` は存在しません**。Terraform Provider のスキーマ上は
-`authentik_stage_source` リソース自体が見えるため一見使えそうですが、
-バックエンド機能自体が Enterprise 限定である可能性が高いです（本セッションでは
-自己ホストの OSS 版を前提にしているため未確認・要検証）。
-
-そのため、確実に OSS で動く代替として、**連携ページへの案内リンクを表示する
-静的な Prompt Stage**（`type = "static"` または `"alert_info"`、Provider スキーマの
-許可値に含まれることを確認済み）を Stage 5 として追加し、実際の連携操作は
-enrollment 完了後に本人が Authentik の「Connected Sources」画面（ユーザー設定内）で
-行ってもらう形にします。ボタンを押さず「後で」を選んでも先へ進める（スキップ可能）ようにします。
-
-```hcl
-# terraform/platform/idp/enrollment.tf への追記イメージ（未実装）
-resource "authentik_stage_prompt_field" "recommend_connect" {
-  name      = "enrollment-field-recommend-connect"
-  field_key = "recommend_connect_info"
-  label     = "GitHub・Discord連携のご案内"
-  type      = "static"  # または alert_info。実機で表示内容にリンクを含められるか要確認
-  sub_text  = <<-TEXT
-    GitHub・Discord アカウントの連携は任意ですが、連携しておくと
-    Organization への招待や OB/OG 向け Discord ロールの自動付与がスムーズになります。
-    後からいつでも「Connected Sources」画面（ユーザー設定）から連携できます。
-  TEXT
-  order     = 100
-}
-
-resource "authentik_stage_prompt" "recommend_connect" {
-  name   = "enrollment-recommend-connect"
-  fields = [authentik_stage_prompt_field.recommend_connect.id]
-}
-
-resource "authentik_flow_stage_binding" "recommend_connect" {
-  target = authentik_flow.enrollment.uuid
-  stage  = authentik_stage_prompt.recommend_connect.id
-  order  = 50  # login (order=40) の後
-}
-```
-
-### 未決事項（要相談・要検証）
-
-- `authentik_stage_source` が本当に Enterprise 限定かどうかの実機確認
-  （OSS で使えるなら、この Stage は静的案内ではなく本物の連携ボタンに差し替えられる）
-- `type = "static"` / `"alert_info"` の `sub_text` にリンク（Connected Sources 画面への URL）を
-  埋め込めるか（Markdown/HTML が通るか）の実機確認。通らない場合は文字列での案内のみになる
-- Connected Sources 画面の正確な URL パス（Authentik の SPA ルーティングに依存するため
-  バージョンで変わる可能性があり、実装時にログインして確認する）
-- GitHub 連携用の Stage も同じパターンで追加するか（`provider_github_source.tf` は既存だが、
-  enrollment フロー内での案内 Stage はまだない）
+`recommend_connect`（`terraform/platform/idp/recovery.tf`）として実装済み・実機検証済み。
+`type = "static"` の Prompt Stage（連携ボタンではなく案内文言のみ）で、パスワード設定完了直後、
+初回のみ表示されます（`has_usable_password()` が False の間だけ表示するゲートを流用）。
+`authentik_stage_source`（Flow内でその場連携させる機能）が Enterprise 限定と確認済みのため、
+この静的案内 + 「後から Connected Sources 画面で連携してください」という案内に留めています。

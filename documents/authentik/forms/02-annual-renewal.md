@@ -1,8 +1,10 @@
 # 年次継続確認フォーム（Q1 / Q2）
 
-**状態: 未実装・設計**。`02-membership-lifecycle.md` の「年次サイクル」で定義した
-Q1（全員向け継続確認）・Q2（卒業年度向け OB/OG 分岐・留年届）を、実際にどう Terraform
-リソースへ落とし込むかをフィールド単位で定義します。全体のいつ・なぜ・PR運用は
+**状態: Flow自体は実装済み・実機検証済み**（`terraform/platform/idp/annual_renewal.tf`）。
+ただしログイン中に自動でこの Flow へ迂回させる配線は未実装（詳細は下記「未解決（要実装判断）」、
+および `02-membership-lifecycle.md` の「Terraform への影響」参照）。`02-membership-lifecycle.md`
+の「年次サイクル」で定義した Q1（全員向け継続確認）・Q2（卒業年度向け OB/OG 分岐・留年届）を、
+実際にどう Terraform リソースへ落とし込むかをフィールド単位で定義します。全体のいつ・なぜ・PR運用は
 `02-membership-lifecycle.md` を参照してください。ここでは「フォームそのものの仕様」に絞ります。
 
 ---
@@ -85,12 +87,17 @@ Bot が PR を提案する段階での分岐は `02-membership-lifecycle.md` の
 
 ---
 
-## Terraform 実装イメージ（未実装・設計のみ）
+## Terraform 実装イメージ（当初の設計スケッチ・一部は実装と異なる）
+
+> このコードブロックは実装前に書いた設計イメージで、細部が実際の
+> `terraform/platform/idp/annual_renewal.tf` と異なります（例: `radio-button-group` の
+> 選択肢は実際には `placeholder_expression` + Python 式で与えている。詳細は下の
+> 「実機検証で解決済み」参照）。全体の骨格（Stage構成・ゲーティングの考え方）は
+> このイメージ通りに実装されています。
 
 ```hcl
-# forms/annual_renewal.tf（イメージ。下記「実装前に検証必須」の通り、
-# 独立 Flow ではなく LC-Cloud authorization flow への直接バインドになる可能性が高い。
-# この resource "authentik_flow" ブロックごと不要になるかもしれない）
+# forms/annual_renewal.tf（イメージ。実際には独立 Flow として実装された。
+# LC-Cloud authorization flow への直接バインドは行っていない）
 
 resource "authentik_flow" "annual_renewal" {
   name        = "Annual Renewal"

@@ -19,23 +19,24 @@ microservices-terraform/
 │
 ├── terraform/                         # Terraform 実装一式
 │   ├── platform/                      # 🔴 Tier 1：管理者のみ
-│   │   ├── idp/                       # Authentik 全体設定
-│   │   │   ├── flows/                 # 入会フロー・パスワードリセット等
-│   │   │   ├── providers/             # LC-Cloud 等の SSO プロバイダ定義
-│   │   │   └── policies/              # アクセスポリシー
-│   │   ├── members/                   # メンバーライフサイクル管理
+│   │   ├── idp/                       # Authentik 全体設定（フラット構成。サブディレクトリは無く、
+│   │   │   │                          #   enrollment.tf / recovery.tf / annual_renewal.tf /
+│   │   │   │                          #   policy_*.tf / provider_*.tf 等がプレフィックス命名で並ぶ）
+│   │   ├── members/                   # メンバーライフサイクル管理（active/ob-og/alumniの3層）
 │   │   │   ├── active/
 │   │   │   │   ├── grad-2027/         # 2027年度卒業予定コホート
 │   │   │   │   │   ├── members.yaml              # 管理者: id・role（平文 OK）
 │   │   │   │   │   ├── members_secrets.yaml.enc  # 管理者: email・student_id（SOPS 暗号化）
-│   │   │   │   │   └── auto-gen-members.yaml     # Bot: username・display_name（enrollment後）
+│   │   │   │   │   └── auto-gen-members.yaml     # Bot: username・display_name（enrollment後・平文）
 │   │   │   │   └── grad-2026/         # 2026年度卒業予定コホート
 │   │   │   │       ├── members.yaml
 │   │   │   │       ├── members_secrets.yaml.enc
 │   │   │   │       └── auto-gen-members.yaml
-│   │   │   ├── alumni/                # OB/OG（無効化済みメンバー）
-│   │   │   │   └── grad-2025/         # 2025年度卒業済みコホート
-│   │   │   └── auto-gen-github-usernames.yaml  # Bot: GitHub username マップ（OAuth連携時）
+│   │   │   ├── ob-og/                 # 卒業後も連絡を継続するOB/OG（同じ grad-XXXX/ 構成、
+│   │   │   │                          #   ただし auto-gen-members.yaml.enc 等はSOPS暗号化
+│   │   │   │                          #   ＝ lcn_xxxxxx 以外の個人情報を匿名化。.sops.yaml 参照）
+│   │   │   ├── alumni/                # 卒業・退会済みで連絡不要なメンバー（ob-og と同じ暗号化方針）
+│   │   │   └── auto-gen-github-usernames.yaml  # Bot: GitHub username マップ（OAuth連携時、平文・全体共通）
 │   │   ├── network/                   # VPC Gateway・外部ネットワーク・subnetpool
 │   │   │   ├── gateway.tf             # VPC Gateway ルーター
 │   │   │   ├── subnetpool.tf          # IP 帯域マスタープール
@@ -46,8 +47,10 @@ microservices-terraform/
 │   │   │   └── main.tf
 │   │   └── github/                    # GitHub Organization 設定
 │   │       ├── teams.tf               # GitHub Teams 定義
-│   │       ├── members.tf             # GitHub Org メンバー管理（auto-gen から取得）
-│   │       └── branch_protection.tf   # ブランチ保護・PR 承認ルール
+│   │       ├── branch_protection.tf   # ブランチ保護・PR 承認ルール
+│   │       └── codeowners.tf          # CODEOWNERS 自動生成
+│   │       # GitHub Org メンバーの個々の所属管理（auto-gen から取得）は
+│   │       # このディレクトリではなく terraform/platform/members/github_memberships.tf 側
 │   │
 │   ├── catalog/                       # 🟡 Tier 2：権限者が編集、誰でも PR 可
 │   │   ├── billing-accounts/          # 請求アカウント（クォータ・予算の管理単位）

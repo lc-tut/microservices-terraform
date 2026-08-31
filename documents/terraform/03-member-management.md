@@ -242,6 +242,28 @@ resource "github_membership" "this" {
 
 ## アカウント自動プロビジョニングフロー
 
+> **注意（実装との乖離）**: 以下の図・コード例（「アカウント自動プロビジョニングフロー」
+> 「Bot 自動更新フロー」「Mailu エイリアス同期」「メンバーライフサイクル」の「入会時」節）は
+> 当初の設計スケッチで、実装とは複数の点で異なります（後続の「チームメンバーシップ」節以降は
+> この乖離の対象外です）。
+> - `scripts/sync-mail-aliases.sh` は存在しません。Mailu ではなく、
+>   `members_secrets.yaml.enc` の `email` をそのまま Authentik User の email に
+>   渡しています（`terraform/platform/members/authentik_users.tf`）
+> - `.github/workflows/sync-members.yml` / `sync-github-usernames.yml` という
+>   2つのワークフローではなく、`.github/workflows/authentik-dispatch.yml` 1つに
+>   統合されています。`auto-gen-members.yaml` のキーも `id` ではなく `username`
+>   （値は `{pk, display_name}`）です
+> - 「GitHub OAuth連携（必須）」「WebAuthn MFA登録（必須）」は enrollment flow の
+>   話ですが、招待制 Flow（`enrollment.tf`）自体を 2026-08-31 に削除しました
+>   （実際に使われる経路ではなかったため）。実際の入会は `authentik_users.tf` が
+>   直接ユーザーを作成し `member-recovery` Flow 経由の「ようこそ」メールで
+>   パスワード・username を設定してもらう方式です（詳細は
+>   `documents/authentik/02-membership-lifecycle.md`・`documents/authentik/forms/01-enrollment.md`・
+>   `16-implementation-phases.md` の Phase 2 拡張節を参照）。
+>   GitHub/Discord連携やMFA登録を必須にする仕組みは現状ありません
+> - PR承認を経た手動 apply ではなく、Bot（`authentik-dispatch.yml`）が
+>   `auto-gen-members.yaml` を直接コミット・プッシュします（`[skip ci]` 付き）
+
 ```text
 管理者が members.yaml に id・role を追加
 管理者が members_secrets.yaml に email・student_id を追加（SOPS 再暗号化）

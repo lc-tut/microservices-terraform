@@ -25,7 +25,7 @@ Authentik がホストする入力フォーム（Flow + Prompt Stage）を1つ�
   カスタムバリデーション（例: 「A・Bどちらか1つは必須」）は書ける。個々の `required` は静的な真偽値のみ |
 | ログインは username 固定 | ❌ `authentik_stage_identification.user_fields` に `"email"` を含めれば email ログインも可能（`recovery.tf` に前例あり） |
 | Discord OAuth 連携は特別な実装が要る | ❌ `authentik_source_oauth.provider_type = "discord"` が公式にサポートされている（GitHubと同格） |
-| Flow の途中でソース連携（`authentik_stage_source`）を挟める | △ Terraform リソースとしては存在するが、`authentik_policy_event_matcher` の `app` 許可値には無印の `authentik.stages.source` が無く `authentik.enterprise.stages.source` のみ存在 → Enterprise 限定の可能性が高い（未確定、実機要検証） |
+| Flow の途中でソース連携（`authentik_stage_source`）を挟める | ❌ Enterprise 限定と確認済み（公式ドキュメント `add-secure-apps/flows-stages/stages/source/` に Enterprise バッジあり）。`enrollment.tf` では代わりに静的な案内 Stage（`recommend_connect`）で代替している |
 | `module "user"` という汎用モジュールがある | ❌ 存在しない。実装は `terraform/platform/members/authentik_users.tf` の `resource "authentik_user" "members"` に直接書かれている |
 
 ---
@@ -34,9 +34,9 @@ Authentik がホストする入力フォーム（Flow + Prompt Stage）を1つ�
 
 | ドキュメント | フォーム | 状態 |
 | --- | --- | --- |
-| [01-enrollment.md](01-enrollment.md) | 入会フォーム | コア部分は実装済み。GitHub/Discord連携の推奨案内Stageは未実装・設計 |
-| [02-annual-renewal.md](02-annual-renewal.md) | 年次継続確認フォーム（Q1 全員 / Q2 卒業年度: OB/OG・連絡不要・留年届） | 未実装・設計 |
-| [03-contact-info.md](03-contact-info.md) | 本名・個人連絡先登録フォーム | 未実装・設計 |
+| [01-enrollment.md](01-enrollment.md) | 入会フォーム | 実装済み・実機検証済み（GitHub/Discord連携の推奨案内Stage含む） |
+| [02-annual-renewal.md](02-annual-renewal.md) | 年次継続確認フォーム（Q1 全員 / Q2 卒業年度: OB/OG・連絡不要・留年届） | Flow自体は実装済み・実機検証済み。ただしログイン時に自動で割り込ませる配線は未実装（`02-membership-lifecycle.md`「Terraformへの影響」参照） |
+| [03-contact-info.md](03-contact-info.md) | 本名・個人連絡先登録フォーム | 実装済み・実機検証済み（`annual_renewal.tf` のStage 3として） |
 
 Discord Bot の `/verify` はAuthentik上のフォームではない（Discord側で完結する）ため、
 このディレクトリの対象外です。詳細は [../04-discord-integration.md](../04-discord-integration.md)。

@@ -9,21 +9,23 @@ Terraform での管理には
 [goauthentik/terraform-provider-authentik](https://registry.terraform.io/providers/goauthentik/authentik/latest/docs)
 を使用します。別途 image や独自 provider は不要です。
 
+実際の `terraform/platform/idp/` はサブディレクトリの無いフラット構成で、
+ファイル名のプレフィックスで役割を表します（後述のコード例のパスコメントも
+これに合わせて読んでください）。このドキュメントで扱う核となるファイルは以下です
+（`annual_renewal.tf`・`authentication.tf`・`brand.tf`・`provider_discord_source.tf` 等、
+このドキュメント作成後に追加されたファイルは `documents/authentik/` 側を参照してください）。
+
 ```text
 terraform/platform/idp/
-├── main.tf              # provider 設定・共通 data source
+├── main.tf                    # provider 設定・共通 data source
 ├── variables.tf
-├── flows/
-│   ├── enrollment.tf    # 入会フロー（username 自己設定）
-│   └── recovery.tf      # パスワードリセットフロー
-├── providers/
-│   ├── lc_cloud.tf      # LC-Cloud OIDC プロバイダ（フェデレーション認証）
-│   └── github_source.tf # GitHub OAuth Source（任意連携）
-├── policies/
-│   └── username.tf      # username バリデーションポリシー
-└── notifications/
-    ├── transports.tf    # Webhook・メール送信設定
-    └── rules.tf         # 通知トリガールール
+├── recovery.tf                 # パスワードリセット／初回ウェルカムフロー（入会時の
+│                              #   username・パスワード設定もここで行う。下記「入会フロー」参照）
+├── provider_lc_cloud.tf        # LC-Cloud OIDC プロバイダ（フェデレーション認証）
+├── provider_github_source.tf   # GitHub OAuth Source（任意連携）
+├── policy_username.tf          # username バリデーションポリシー
+├── notification_transports.tf  # Webhook・メール送信設定
+└── notification_rules.tf       # 通知トリガールール
 ```
 
 ---
@@ -79,122 +81,23 @@ variable "webhook_secret" {
 
 ## 入会フロー（enrollment flow）
 
-ユーザーが招待リンクを踏んだ後に自分で `username` と `display_name` を設定します。
-`email` は招待リソース（`authentik_invitation`）の `fixed_data` で事前に埋め込まれます。
+**このセクションが記述していた `enrollment.tf`（招待コード制の独立 Flow）は
+2026-08-31 に削除しました。** `authentik_invitation` を発行する仕組みがどこにも無く、
+`brand.flow_enrollment` にも設定されておらず、実際に新入会員が通る経路ではなかったためです。
 
-```hcl
-# flows/enrollment.tf
-
-# フロー本体
-resource "authentik_flow" "enrollment" {
-  name        = "Member Enrollment"
-  slug        = "member-enrollment"
-  title       = "LinuxClub メンバー登録"
-  designation = "enrollment"
-  layout      = "stacked"
-}
-
-# ステージ 1: 招待コード検証
-resource "authentik_stage_invitation" "verify" {
-  name                      = "enrollment-invitation-verify"
-  continue_flow_without_invitation = false
-}
-
-# ステージ 2: username・display_name・パスワード入力
-resource "authentik_stage_prompt" "user_info" {
-  name = "enrollment-user-info"
-
-  fields = [
-    authentik_stage_prompt_field.username.pk,
-    authentik_stage_prompt_field.display_name.pk,
-    authentik_stage_prompt_field.password.pk,
-    authentik_stage_prompt_field.password_repeat.pk,
-  ]
-
-  validation_policies = [
-    authentik_policy_expression.username_rules.pk,
-  ]
-}
-
-resource "authentik_stage_prompt_field" "username" {
-  field_key   = "username"
-  label       = "ユーザー名（LC-Cloud ID）"
-  type        = "text"
-  placeholder = "例: alice（半角英小文字・数字・ハイフン）"
-  required    = true
-  order       = 100
-}
-
-resource "authentik_stage_prompt_field" "display_name" {
-  field_key   = "name"
-  label       = "表示名"
-  type        = "text"
-  placeholder = "例: Alice Yamada"
-  required    = true
-  order       = 200
-}
-
-resource "authentik_stage_prompt_field" "password" {
-  field_key = "password"
-  label     = "パスワード"
-  type      = "password"
-  required  = true
-  order     = 300
-}
-
-resource "authentik_stage_prompt_field" "password_repeat" {
-  field_key = "password_repeat"
-  label     = "パスワード（確認）"
-  type      = "password"
-  required  = true
-  order     = 400
-}
-
-# ステージ 3: ユーザー書き込み
-resource "authentik_stage_user_write" "write" {
-  name                       = "enrollment-user-write"
-  user_creation_mode         = "always_create"
-  create_users_as_inactive   = false
-  create_users_group         = authentik_group.all_members.pk
-}
-
-# ステージ 4: ログイン
-resource "authentik_stage_user_login" "login" {
-  name = "enrollment-user-login"
-}
-
-# フローバインディング（ステージの順序）
-resource "authentik_flow_stage_binding" "verify" {
-  target = authentik_flow.enrollment.uuid
-  stage  = authentik_stage_invitation.verify.id
-  order  = 10
-}
-
-resource "authentik_flow_stage_binding" "user_info" {
-  target = authentik_flow.enrollment.uuid
-  stage  = authentik_stage_prompt.user_info.id
-  order  = 20
-}
-
-resource "authentik_flow_stage_binding" "write" {
-  target = authentik_flow.enrollment.uuid
-  stage  = authentik_stage_user_write.write.id
-  order  = 30
-}
-
-resource "authentik_flow_stage_binding" "login" {
-  target = authentik_flow.enrollment.uuid
-  stage  = authentik_stage_user_login.login.id
-  order  = 40
-}
-```
+実際の入会は、Terraform が `members_secrets.yaml.enc` の内容から直接 `authentik_user` を
+作成し（パスワード未設定の状態）、`recovery.tf` の「ようこそ」Flow 経由で本人に
+username・パスワードを設定してもらう方式です。詳細は
+[`documents/authentik/forms/01-enrollment.md`](../authentik/forms/01-enrollment.md) と
+[`documents/authentik/02-membership-lifecycle.md`](../authentik/02-membership-lifecycle.md) を
+参照してください。
 
 ---
 
 ## username バリデーションポリシー
 
 ```hcl
-# policies/username.tf
+# policy_username.tf
 resource "authentik_policy_expression" "username_rules" {
   name       = "enrollment-username-rules"
   expression = <<-PYTHON
@@ -232,7 +135,8 @@ GitHub アカウント連携は任意です。連携済みのメンバーは Git
 ログインにも使えます（ログイン flow は後述の「ログイン flow のカスタマイズ」参照）。
 一方 `enrollment_flow` は `null` のままにしており、GitHub 認証だけで
 未連携ユーザーが新規アカウントを作ることはできません
-（`member-enrollment` の招待制を維持するため）。
+（新規アカウントは Terraform が `members_secrets.yaml.enc` を起点に直接作成する方式のみ。
+上の「入会フロー」節参照）。
 
 ```hcl
 # provider_github_source.tf
@@ -292,17 +196,23 @@ Brand（ログイン画面のロゴ・favicon・背景画像・タイトル）�
 
 ## Webhook トランスポート
 
+実際の `notification_transports.tf` / `notification_rules.tf` では、GitHub リポジトリの
+owner/name を `var.github_repo_owner`/`var.github_repo_name` から組み立て、
+`var.webhook_secret` が空なら全リソースを `count = 0` にして作らない
+（`local.webhook_enabled = var.webhook_secret != ""`）という条件付き構成になっています。
+以下のコード例では説明簡略化のため `count` を省略しています。
+
 ### enrollment 完了通知（→ auto-gen-members.yaml 更新）
 
 ```hcl
-# notifications/transports.tf
-resource "authentik_notification_transport" "enrollment_webhook" {
+# notification_transports.tf
+resource "authentik_event_transport" "enrollment_webhook" {
   name = "enrollment-completed-webhook"
   mode = "webhook"
 
-  webhook_url            = "https://api.github.com/repos/linuxclub/microservices-terraform/dispatches"
-  webhook_mapping        = authentik_property_mapping_notification.enrollment_payload.pk
-  send_once              = false
+  webhook_url          = "https://api.github.com/repos/${var.github_repo_owner}/${var.github_repo_name}/dispatches"
+  webhook_mapping_body = authentik_property_mapping_notification.enrollment_payload.id
+  send_once            = false
 }
 
 resource "authentik_property_mapping_notification" "enrollment_payload" {
@@ -323,13 +233,13 @@ resource "authentik_property_mapping_notification" "enrollment_payload" {
 ### GitHub 連携変更通知（→ auto-gen-github-usernames.yaml 更新）
 
 ```hcl
-resource "authentik_notification_transport" "github_link_webhook" {
+resource "authentik_event_transport" "github_link_webhook" {
   name = "github-source-linked-webhook"
   mode = "webhook"
 
-  webhook_url            = "https://api.github.com/repos/linuxclub/microservices-terraform/dispatches"
-  webhook_mapping        = authentik_property_mapping_notification.github_link_payload.pk
-  send_once              = false
+  webhook_url          = "https://api.github.com/repos/${var.github_repo_owner}/${var.github_repo_name}/dispatches"
+  webhook_mapping_body = authentik_property_mapping_notification.github_link_payload.id
+  send_once            = false
 }
 
 resource "authentik_property_mapping_notification" "github_link_payload" {
@@ -339,8 +249,9 @@ resource "authentik_property_mapping_notification" "github_link_payload" {
     return {
       "event_type": f"authentik-{event_type}",
       "client_payload": {
-        "username": notification.event.user.get("username", ""),
-        "source":   notification.event.context.get("source", {}).get("slug", ""),
+        "username":          notification.event.user.get("username", ""),
+        "source":            notification.event.context.get("source", {}).get("slug", ""),
+        "github_identifier": str(notification.event.context.get("identifier", "")),
       }
     }
   PYTHON
@@ -352,57 +263,57 @@ resource "authentik_property_mapping_notification" "github_link_payload" {
 ## 通知ルール
 
 ```hcl
-# notifications/rules.tf
+# notification_rules.tf
 
 # enrollment 完了 → auto-gen-members.yaml 更新 Webhook
-resource "authentik_notification_rule" "enrollment_completed" {
+resource "authentik_event_rule" "enrollment_completed" {
   name              = "enrollment-completed"
-  transports        = [authentik_notification_transport.enrollment_webhook.pk]
+  transports        = [authentik_event_transport.enrollment_webhook.id]
   severity          = "notice"
-  group             = authentik_group.all_members.pk
+  destination_group = authentik_group.all_members.id
 
   # model_created: authentik_core.user のみ対象
 }
 
-resource "authentik_event_matcher_policy" "enrollment_event" {
+resource "authentik_policy_event_matcher" "enrollment_event" {
   name   = "match-enrollment-model-created"
   action = "model_created"
   model  = "authentik_core.user"
 }
 
 resource "authentik_policy_binding" "enrollment_rule_policy" {
-  target = authentik_notification_rule.enrollment_completed.pk
-  policy = authentik_event_matcher_policy.enrollment_event.pk
+  target = authentik_event_rule.enrollment_completed.id
+  policy = authentik_policy_event_matcher.enrollment_event.id
   order  = 0
 }
 
 # GitHub source_linked / source_unlinked → auto-gen-github-usernames.yaml 更新
-resource "authentik_notification_rule" "github_source_change" {
+resource "authentik_event_rule" "github_source_change" {
   name       = "github-source-change"
-  transports = [authentik_notification_transport.github_link_webhook.pk]
+  transports = [authentik_event_transport.github_link_webhook.id]
   severity   = "notice"
-  group      = authentik_group.all_members.pk
+  destination_group = authentik_group.all_members.id
 }
 
-resource "authentik_event_matcher_policy" "source_linked_event" {
+resource "authentik_policy_event_matcher" "source_linked_event" {
   name   = "match-source-linked"
   action = "source_linked"
 }
 
-resource "authentik_event_matcher_policy" "source_unlinked_event" {
+resource "authentik_policy_event_matcher" "source_unlinked_event" {
   name   = "match-source-unlinked"
   action = "source_unlinked"
 }
 
 resource "authentik_policy_binding" "source_linked_rule" {
-  target = authentik_notification_rule.github_source_change.pk
-  policy = authentik_event_matcher_policy.source_linked_event.pk
+  target = authentik_event_rule.github_source_change.id
+  policy = authentik_policy_event_matcher.source_linked_event.id
   order  = 0
 }
 
 resource "authentik_policy_binding" "source_unlinked_rule" {
-  target = authentik_notification_rule.github_source_change.pk
-  policy = authentik_event_matcher_policy.source_unlinked_event.pk
+  target = authentik_event_rule.github_source_change.id
+  policy = authentik_policy_event_matcher.source_unlinked_event.id
   order  = 1
 }
 ```
@@ -482,20 +393,21 @@ data "authentik_property_mapping_provider_scope" "all" {
   │
   └─ terraform apply
        │
-       └─ authentik_invitation "pending" が作成される（7日間有効）
+       └─ authentik_user が is_active=false・パスワード未設定で直接作成される
             │
-            └─ メンバーが招待リンクを受け取り、ブラウザで開く
+            └─ 「LinuxClubへようこそ」メールが送信される（member-recovery Flow 経由）
                  │
-                 ├─ ステージ 1: 招待コード検証
-                 ├─ ステージ 2: username・display_name・パスワード入力
-                 │   （username はここで本人が決める）
-                 ├─ ステージ 3: ユーザー作成・all-members グループに追加
-                 └─ ステージ 4: ログイン完了
+                 └─ メンバーがリンクを受け取り、ブラウザで開く
                       │
-                      └─ model_created イベント発火
-                           └─ Webhook → GitHub Actions
-                                └─ auto-gen-members.yaml に email:username を書き込み
-                                     └─ 次回 terraform apply で module "user" が作成される
+                      ├─ ようこそ案内（初回のみ。pending_user 済みなので
+                      │   identification はスキップされる）
+                      ├─ username 入力（本人がここで決める）
+                      ├─ パスワード設定
+                      └─ GitHub/Discord連携のご案内（初回のみ）
+                           │
+                           └─ model_created イベント発火
+                                └─ Webhook → GitHub Actions（authentik-dispatch.yml）
+                                     └─ auto-gen-members.yaml に username をキーで書き込み
 ```
 
 ---
