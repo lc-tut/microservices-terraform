@@ -133,8 +133,15 @@ Phase 0
 - enrollment に GitHub/Discord 連携の推奨案内 Stage を追加（`authentik_stage_source` は
   Enterprise 限定と確認済みのため、静的案内 Stage で代替）
 - Brand（ロゴ・favicon・背景画像）を `assets/` 配下の画像から raw.githubusercontent.com 経由で設定
+- Discord OAuth Source（`provider_discord_source.tf`）: アカウント紐づけ専用（ログインには使わない）。実装済み
+- ログイン画面のカスタマイズ（`authentication.tf`）: 組み込み `default-authentication-flow` は
+  blueprint 管理で上書きされるため、独自の authentication flow を新設してタイトル・背景を差し替え
+- `recovery.tf` を「初回 welcome」と「パスワードリセット」で出し分け: `has_usable_password()`
+  が False（未設定）なら welcome 案内 + identification スキップ、設定済みなら通常のリセット動線。
+  welcome メールは `Accept-Language: ja` を付けて送信し、同梱の `ja_JP` 翻訳カタログで件名・本文を
+  日本語化。実機検証済み（2026-08-25）
 
-**未実装（別途）**: Discord Bot 本体・`provider_discord_source.tf`（変数の口だけ用意済み）。
+**未実装（別途）**: Discord Bot 本体。
 `stage_configuration` フローをログイン中に自動で割り込ませる配線方法は未確定。
 
 ---
