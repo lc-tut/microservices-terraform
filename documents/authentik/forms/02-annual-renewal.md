@@ -184,29 +184,34 @@ resource "authentik_flow_stage_binding" "record" {
 
 ---
 
-## 実装前に検証必須（未決事項というより着手前スパイクの対象）
+## 実機検証で解決済み
 
-- **⚠️ フロー全体の骨格が成立するかどうか（最優先で検証）**: この設計は
-  `annual_renewal` という**独立した `authentik_flow`**（`designation = "stage_configuration"`）を作り、
-  そこに Q1/Q2/連絡先の Stage を並べる形にしていますが、Authentik には
-  「ログイン中の authorization flow の途中で、無関係な独立フローへ丸ごと迂回する」
-  ような汎用的な仕組みは無いはずです。`stage_configuration` designation のフローは通常、
-  MFA 未設定時の誘導のように**特定のステージが持つ `configure_flow` ポインタ経由**で
-  呼ばれるものであり、今回のように「ログインのたびに毎回チェックして割り込む」使い方には
-  向いていない可能性があります。より実現しやすい形は、**LC-Cloud の authorization flow
-  そのものに Q1/Q2/連絡先の Stage を直接バインドし、`needs_renewal` ポリシーで
-  ゲートする**（独立した Flow を作らない）構成です。この骨格の妥当性は
-  Terraform Provider のスキーマだけでは判断できず、実際の Authentik インスタンスで
-  小さく検証してから残りの実装を進めるべきです。ここが解決しないと、
-  以下の Stage/Policy の設計自体が組み直しになる可能性があります。
-- **`radio-button-group` の選択肢（choices）定義方法**: `authentik_stage_prompt_field` の
-  Terraform スキーマを確認した結果、`choices` に相当する引数は**存在しないことを確認済み**です
-  （`field_key` / `label` / `type` / `required` / `placeholder` / `initial_value` 等のみ。
-  「未検証」ではなく「このリソースには無い」という確定情報）。
-  Authentik 本体の API/UI 側で選択肢をどう設定するか（別リソース経由か、
-  Terraform では表現できず手動/Blueprint 併用になるか）を実装前に確認する必要があります。
-- `authentik.stages.prompt` イベントの `request.context["prompt_data"]` が、
-  同一フロー内の**後続ステージのポリシー**からどこまで参照できるかの実機検証
-  （`chose_ob_og` ポリシーが前段 Stage 2 の回答を見られるかどうか）
+以下はローカル Authentik への実際の apply・Flow Executor API 経由の実行で確認済みです。
+
+- **フロー全体の骨格**: `annual_renewal` という独立 Flow（`designation = "stage_configuration"`）に
+  Q1/Q2/連絡先/記録の Stage を並べる構成で、実際に作成・実行できることを確認済み。
+  Flow を直接 URL（`/if/flow/annual-renewal/`）で開けば動作する
+- **`radio-button-group` の選択肢**: `choices` 引数は存在しないが、`placeholder_expression = true` +
+  `placeholder` を Python 式（選択肢のリストを `return`）にする方式で実現できることを確認済み
+  （実ソース `authentik/stages/prompt/models.py` の `get_choices` で仕組みを特定し、
+  実際に Flow Executor API のレスポンスで `choices` が正しく返ることも確認）
+- **後続ステージのポリシーからの `prompt_data` 参照**: `field_key = "attributes.xxx"` は
+  `prompt_data` 上で `{"attributes": {"xxx": ...}}` という**ネストした辞書**になることを実機で確認済み。
+  また `chose_ob_og` のように前段ステージの回答を見るポリシーは、`evaluate_on_plan = false` +
+  `re_evaluate_policies = true` の組み合わせが必要（デフォルトのプラン時一発評価だと
+  前段の回答がまだ存在せず常に False になるバグを実際に踏んで修正済み。
+  `authentik/flows/planner.py` / `markers.py` で仕組みを確認）
+- **`attributes.xxx` の user_write への反映**: `authentik/stages/user_write/stage.py` の
+  `update_user` で、`prompt_data` の `attributes` キー（辞書ごとマージ）と
+  `attributes.xxx` キー（ネストパスへの個別書き込み）の両方が処理されることを確認済み
+
+## 未解決（要実装判断）
+
+- **ログイン中への自動割り込み配線**: 上記はすべて「Flow を直接開けば動く」ことの確認であり、
+  「ログインのたびに自動でこの Flow へ迂回させる」配線はまだ実装していない。
+  `stage_configuration` designation は通常 MFA 未設定時の誘導のように特定ステージの
+  `configure_flow` ポインタ経由で呼ばれるものであり、今回のような用途に使えるかは未確認。
+  より確実なのは、LC-Cloud の authorization flow に Q1〜記録の Stage を直接バインドし
+  `needs_renewal` ポリシーでゲートする（独立 Flow を使わない）構成に組み直すこと
 - Q1 で「継続しない」を選んだ場合の即時確認（本当に離脱してよいかの再確認ダイアログ等）は
   今回スコープ外

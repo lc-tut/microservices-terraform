@@ -10,9 +10,9 @@ resource "authentik_event_transport" "enrollment_webhook" {
   name = "enrollment-completed-webhook"
   mode = "webhook"
 
-  webhook_url     = local.webhook_url
+  webhook_url          = local.webhook_url
   webhook_mapping_body = authentik_property_mapping_notification.enrollment_payload[0].id
-  send_once       = false
+  send_once            = false
 }
 
 resource "authentik_property_mapping_notification" "enrollment_payload" {
@@ -38,9 +38,9 @@ resource "authentik_event_transport" "github_link_webhook" {
   name = "github-source-linked-webhook"
   mode = "webhook"
 
-  webhook_url     = local.webhook_url
+  webhook_url          = local.webhook_url
   webhook_mapping_body = authentik_property_mapping_notification.github_link_payload[0].id
-  send_once       = false
+  send_once            = false
 }
 
 resource "authentik_property_mapping_notification" "github_link_payload" {

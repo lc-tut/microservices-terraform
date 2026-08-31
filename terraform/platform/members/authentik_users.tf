@@ -37,7 +37,20 @@ resource "authentik_user" "members" {
   }
 }
 
-# ユーザー作成後にリカバリーメールを送信する（active のみ。ob-og は設定済みのため対象外）
+# ユーザー作成後にウェルカムメールを送信する（active のみ。ob-og は設定済みのため対象外）。
+# recovery.tf の welcome-email（member-recovery Flow には bind していない、文面だけ使う
+# EmailStage）を参照する。届いたリンクの遷移先自体は member-recovery Flow のまま
+# （recovery_email API が brand.flow_recovery に固定されているため）だが、
+# pending_user 済みなら identification をスキップし、has_usable_password()
+# が False（＝まだ一度もパスワードを設定していない）なら「ようこそ」案内を
+# 先頭に出す Stage 分岐で初回設定らしい体験にしている。
+#
+# Accept-Language: ja が必須。User.locale() は request.LANGUAGE_CODE がある場合
+# 常にそれを最優先する（authentik/core/models.py）ため、ヘッダー無しだと
+# settings.LANGUAGE_CODE の既定値 "en-us" になり英語メールが送られてしまう
+# （ユーザー個別の locale 属性やブランドの locale 設定は無視される）。
+# 実機検証済み（2026-08-25）: ja_JP 翻訳カタログは同梱されており、
+# このヘッダーだけで件名・本文とも日本語化されることを確認済み
 resource "null_resource" "send_enrollment_email" {
   for_each = { for id, m in local.members_by_id : id => m if m.status == "active" }
 
@@ -48,13 +61,14 @@ resource "null_resource" "send_enrollment_email" {
   provisioner "local-exec" {
     command = <<-EOT
       STAGE_UUID=$(curl -sf \
-        "${var.authentik_url}/api/v3/stages/email/?name=recovery-email" \
+        "${var.authentik_url}/api/v3/stages/email/?name=welcome-email" \
         -H "Authorization: Bearer ${var.authentik_token}" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['results'][0]['pk'])")
       curl -sf -X POST \
         "${var.authentik_url}/api/v3/core/users/${self.triggers.user_pk}/recovery_email/?email=true" \
         -H "Authorization: Bearer ${var.authentik_token}" \
         -H "Content-Type: application/json" \
+        -H "Accept-Language: ja" \
         -d "{\"email_stage\": \"$STAGE_UUID\"}"
     EOT
   }

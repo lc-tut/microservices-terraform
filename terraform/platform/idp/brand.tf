@@ -4,6 +4,11 @@ data "authentik_brand" "default" {
   domain = "authentik-default"
 }
 
+import {
+  to = authentik_brand.default
+  id = data.authentik_brand.default.id
+}
+
 locals {
   # branding_logo/branding_favicon/branding_default_flow_background は、Authentik
   # 2025.12+ の File picker が外部URL（http(s)://...）をパススルー値として正式
@@ -16,9 +21,10 @@ locals {
 }
 
 resource "authentik_brand" "default" {
-  domain        = data.authentik_brand.default.domain
-  default       = true
-  flow_recovery = authentik_flow.recovery.uuid
+  domain              = data.authentik_brand.default.domain
+  default             = true
+  flow_recovery       = authentik_flow.recovery.uuid
+  flow_authentication = authentik_flow.lc_cloud_authentication.uuid
 
   branding_title   = "LinuxClub"
   branding_logo    = "${local.idp_assets_base_url}/linuxclub_wide_logo.png"

@@ -113,6 +113,11 @@ resource "authentik_stage_prompt_field" "recommend_connect" {
     後からいつでも「Connected Sources」画面（ユーザー設定）から連携できます。
   TEXT
   order     = 100
+
+  # static 型フィールドは placeholder が送信値のデフォルトになる（画面上の
+  # プレースホルダーとしては使われない）。空文字のままだと送信時に
+  # "This field may not be blank." で弾かれるため、非空の値を入れておく
+  placeholder = "ok"
 }
 
 resource "authentik_stage_prompt" "recommend_connect" {

@@ -1,8 +1,3 @@
-# field_key="attributes.xxx" による user_write への書き込み、および
-# 各 Stage の policy binding によるスキップ制御はローカル実機で動作確認済み
-# （documents/authentik/forms/02-annual-renewal.md 参照）。
-# ⚠️ 未検証: designation=stage_configuration をログイン中に自動で割り込ませる配線方法
-
 resource "authentik_flow" "annual_renewal" {
   name        = "Annual Renewal"
   slug        = "annual-renewal"
@@ -66,7 +61,7 @@ resource "authentik_stage_prompt_field" "graduation_choice" {
   field_key = "attributes.renewal_choice"
   label     = "今年度で卒業しますか？"
   type      = "radio-button-group"
-  sub_text  = "卒業しない場合は「留年する」を選んでください。来年度以降のコホートへ移動します。"
+  sub_text  = "卒業しない場合は「留年する」を選んでください。来年度以降の退会処理へ移行します。"
   required  = true
   order     = 100
 
@@ -74,7 +69,7 @@ resource "authentik_stage_prompt_field" "graduation_choice" {
   placeholder            = <<-PYTHON
     return [
       {"value": "ob-og", "label": "卒業してOB/OGとして関わる"},
-      {"value": "no-contact", "label": "卒業して連絡は不要"},
+      {"value": "no-contact", "label": "卒業するが連絡不要（退会）"},
       {"value": "repeat-year", "label": "留年する（卒業しない）"},
     ]
   PYTHON

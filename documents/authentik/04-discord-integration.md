@@ -43,11 +43,10 @@ Authentik は Discord を組み込みの OAuth Source タイプとしてサポ�
 `DISCORD_OAUTH_CLIENT_SECRET` から供給）の配線を追加済みです。ローカル（act）では
 `local/.secrets`（`local/.secrets.example` にテンプレート追加済み）の
 `TF_VAR_discord_oauth_client_id` / `TF_VAR_discord_oauth_client_secret` に値を入れます。
-**未実装なのは下記の `authentik_source_oauth "discord"` リソース本体のみ**です。
+`authentik_source_oauth "discord"` リソース本体（`provider_discord_source.tf`）も実装済みです。
 
 ```hcl
-# terraform/platform/idp/provider_discord_source.tf（新規・未実装。
-# 実際の provider_github_source.tf と同じく count で未設定時は作成しないパターンに揃える）
+# terraform/platform/idp/provider_discord_source.tf
 resource "authentik_source_oauth" "discord" {
   count = var.discord_oauth_client_id != "" ? 1 : 0
 
@@ -58,8 +57,10 @@ resource "authentik_source_oauth" "discord" {
   consumer_key    = var.discord_oauth_client_id
   consumer_secret = var.discord_oauth_client_secret
 
-  # ログインには使わない（紐づけ専用。GitHub 連携と同じ方針）
-  authentication_flow = null
+  # GitHub連携と同じ方針: 連携済みメンバーはログインにも使える
+  # （04-idp.md「ログイン flow のカスタマイズ」参照）が、enrollment_flow は
+  # null のままにし、Discord認証だけでの新規アカウント作成は許可しない
+  authentication_flow = authentik_flow.lc_cloud_authentication.uuid
   enrollment_flow      = null
 
   user_matching_mode = "identifier"
@@ -82,7 +83,7 @@ OAuth2 認証情報を使います。
 
 ### OAuth2 で設定すべき権限（スコープ）とリダイレクト URL
 
-**用途がアカウント連携のみ**（ログインには使わない、「経路A」参照）なので、
+アカウント連携に加えてログインにも使いますが（「経路A」参照）、
 Discord Developer Portal の OAuth2 設定で要求するスコープは最小限で足ります。
 
 - **スコープ**: `identify` のみで十分です（Discord のユーザー ID・ユーザー名を取得できれば、

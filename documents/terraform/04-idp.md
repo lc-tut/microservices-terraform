@@ -226,13 +226,19 @@ resource "authentik_group" "all_members" {
 
 ---
 
-## GitHub OAuth Source（任意連携）
+## GitHub OAuth Source（任意連携・ログインにも使用可）
 
-GitHub アカウント連携は任意です。ログイン用ではなく「アカウント紐づけ」専用として設定します。
+GitHub アカウント連携は任意です。連携済みのメンバーは GitHub アカウントでの
+ログインにも使えます（ログイン flow は後述の「ログイン flow のカスタマイズ」参照）。
+一方 `enrollment_flow` は `null` のままにしており、GitHub 認証だけで
+未連携ユーザーが新規アカウントを作ることはできません
+（`member-enrollment` の招待制を維持するため）。
 
 ```hcl
-# providers/github_source.tf
+# provider_github_source.tf
 resource "authentik_source_oauth" "github" {
+  count = var.github_oauth_client_id != "" ? 1 : 0
+
   name          = "GitHub"
   slug          = "github"
   provider_type = "github"
@@ -240,8 +246,9 @@ resource "authentik_source_oauth" "github" {
   consumer_key    = var.github_oauth_client_id
   consumer_secret = var.github_oauth_client_secret
 
-  # ログインには使わない（紐づけ専用）
-  authentication_flow = null
+  # 既に連携済みのメンバーはログインに使える
+  # （authentication_id.sources に登録。下記「ログイン flow のカスタマイズ」参照）
+  authentication_flow = authentik_flow.lc_cloud_authentication.uuid
   enrollment_flow     = null
 
   user_matching_mode = "identifier"
@@ -252,6 +259,34 @@ resource "authentik_source_oauth" "github" {
 連携完了時に `source_linked` イベントが発火し、
 Webhook 経由で `auto-gen-github-usernames.yaml` が自動更新されます
 （詳細は `03-member-management.md` 参照）。
+
+Discord OAuth Source も同じ方針（`authentication_flow` はログイン flow、
+`enrollment_flow` は `null`）で設定しています。詳細は
+[`documents/authentik/04-discord-integration.md`](../authentik/04-discord-integration.md) 参照。
+
+---
+
+## ログイン flow のカスタマイズ
+
+Authentik が自動生成する組み込みの `default-authentication-flow`
+（title 固定で "Welcome to authentik!"）は blueprint 管理下のオブジェクトのため、
+Terraform では直接編集しません（blueprint 再適用時に上書きされる可能性があるため）。
+代わりに独自のログイン flow `lc-cloud-authentication` を作成し、
+`authentik_brand.default.flow_authentication` で差し替えています
+（`terraform/platform/idp/authentication.tf`）。
+
+- ステージ構成は組み込み flow と同じ（identification → password →
+  MFA検証 → user_login の4ステージ）で、title だけ "Welcome to LC-Cloud!" に変更
+- `authentik_stage_identification` の `user_fields` は
+  `["email", "username", "upn"]`。`"upn"` は `attributes.upn` を照合対象にする
+  Authentik の特別なキーで、将来メンバーに独自ドメインのメールアドレスを
+  支給した場合に、大学メールと並行してログインに使えるようにするための受け口
+  （現時点では `attributes.upn` は誰にも設定していないため無害）
+- `sources` に GitHub/Discord source（設定されていれば）を含め、
+  連携済みメンバーはログインページにそのまま SSO ボタンとして表示される
+
+Brand（ログイン画面のロゴ・favicon・背景画像・タイトル）のカスタマイズは
+`16-implementation-phases.md` の Phase 2 実装内容を参照。
 
 ---
 

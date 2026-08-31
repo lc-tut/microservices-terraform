@@ -1,9 +1,9 @@
 resource "authentik_event_rule" "enrollment_completed" {
   count = local.webhook_enabled ? 1 : 0
 
-  name       = "enrollment-completed"
-  transports = [authentik_event_transport.enrollment_webhook[0].id]
-  severity   = "notice"
+  name              = "enrollment-completed"
+  transports        = [authentik_event_transport.enrollment_webhook[0].id]
+  severity          = "notice"
   destination_group = authentik_group.all_members.id
 }
 
@@ -26,9 +26,9 @@ resource "authentik_policy_binding" "enrollment_rule_policy" {
 resource "authentik_event_rule" "github_source_change" {
   count = local.webhook_enabled ? 1 : 0
 
-  name       = "github-source-change"
-  transports = [authentik_event_transport.github_link_webhook[0].id]
-  severity   = "notice"
+  name              = "github-source-change"
+  transports        = [authentik_event_transport.github_link_webhook[0].id]
+  severity          = "notice"
   destination_group = authentik_group.all_members.id
 }
 

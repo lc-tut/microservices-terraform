@@ -49,9 +49,9 @@ variable "lc_cloud_oidc_client_secret" {
 # enrollment 完了 / GitHub 連携変更 の Webhook HMAC シークレット
 # 空文字のままにすると通知 Transport は作成されない
 variable "webhook_secret" {
-  type      = string
-  sensitive = true
-  default   = ""
+  type        = string
+  sensitive   = true
+  default     = ""
   description = "GitHub Actions repository_dispatch の HMAC シークレット"
 }
 
