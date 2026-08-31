@@ -30,8 +30,10 @@
 │  開発マシン (Windows + WSL2)                 │
 │                                             │
 │  Docker Compose                             │
-│    ├─ Authentik (IdP)   :9000              │
-│    └─ Vault dev         :8200              │
+│    └─ Authentik (IdP)   :9000              │
+│                                             │
+│  Docker（単体コンテナ）                      │
+│    └─ MinIO（S3 互換 State バックエンド）:19000 │
 │                                             │
 │  kind                                       │
 │    └─ ローカル K8s クラスター               │
@@ -284,12 +286,22 @@ terraform plan -var="project_name=test-project" -var="team_name=web"
 
 ### 起動
 
+`local/start.sh`（後述の「5. 全サービス起動」参照）が初回のみ `.env` を
+自動生成して起動します。`AUTHENTIK_SECRET_KEY` に加えて
+`AUTHENTIK_BOOTSTRAP_PASSWORD`（akadmin の初期パスワード）・
+`AUTHENTIK_BOOTSTRAP_TOKEN`（Terraform provider 用 API トークン）も
+自動生成されるため、次の「初期設定」を手動で行う必要はありません。
+
+手動でやる場合は以下の通りです。
+
 ```bash
 # 初回のみ: .env を生成して起動
 cd local/authentik
 cp .env.example .env
 SECRET=$(openssl rand -base64 36 | tr -d '\n')
 sed -i "s/change-me-generate-with-openssl-rand-base64-36/$SECRET/" .env
+BOOTSTRAP_PW=$(openssl rand -base64 24 | tr -d '\n')
+sed -i "s#change-me-generate-with-openssl-rand-base64-24#$BOOTSTRAP_PW#" .env
 docker compose up -d
 ```
 
@@ -300,12 +312,21 @@ docker compose -f local/authentik/docker-compose.yml up -d
 
 ### 初期設定
 
+`AUTHENTIK_BOOTSTRAP_PASSWORD`/`AUTHENTIK_BOOTSTRAP_TOKEN` が設定済みなら
+`akadmin` アカウントとAPIトークンは起動時に自動作成されるため、
+以下の手動セットアップは不要です（`.env` にこれらが無い場合のみ必要）。
+
 1. <http://localhost:9000/if/flow/initial-setup/> にアクセス
 1. `akadmin` のパスワードを設定
 1. 管理画面: <http://localhost:9000/if/admin/>
 
+トークンは `.env` の `AUTHENTIK_BOOTSTRAP_TOKEN` の値がそのまま使えます
+（`grep AUTHENTIK_BOOTSTRAP_TOKEN local/authentik/.env`）。
+
 ### Terraform プロバイダー用トークン
 
+前述の `AUTHENTIK_BOOTSTRAP_TOKEN`（`.env`）がそのまま使えるため、通常は
+以下の手動発行は不要です。別のトークンが必要な場合のみ:
 管理画面 → `Admin Interface` → `Directory` → `Tokens` → `Create Token`（スコープ: `API access`）
 
 ```hcl
@@ -369,12 +390,17 @@ cp local/.act.env.example local/.act.env
 
 | キー | 値の取得元 |
 | --- | --- |
-| `AUTHENTIK_TOKEN` | ローカル Authentik 管理画面 → Directory → Tokens |
+| `AUTHENTIK_TOKEN` | ローカル Authentik の `AUTHENTIK_BOOTSTRAP_TOKEN`（`.env`）または管理画面 → Directory → Tokens |
 | `LC_CLOUD_APP_CRED_ID` | `openstack application credential show <name>` |
 | `LC_CLOUD_APP_CRED_SECRET` | Application Credential 作成時に表示される secret |
 | `SOPS_AGE_KEY` | `age-keygen` で生成した秘密鍵（`AGE-SECRET-KEY-...`） |
+| `GH_TERRAFORM_TOKEN` | `terraform/platform/github/` の apply に使う GitHub PAT（`repo`・`admin:org`・`workflow`） |
+| `BOT_TOKEN` | CODEOWNERS 自動修正コミット用（`GH_TERRAFORM_TOKEN` と同じ PAT を流用可） |
 
-`local/.act.env` は変更不要です（`TF_CLI_ARGS_init=-backend=false` が設定済み）。
+`local/.act.env` は S3 バックエンドを無効化するのではなく、
+`local/start.sh` が起動する MinIO（`localhost:19000`）を State バックエンドとして
+使う設定（`AWS_ENDPOINT_URL_S3`・`AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`）が
+デフォルトで入っています。`act` 実行前に `local/start.sh` で MinIO を起動しておく必要があります。
 
 リポジトリルートの `.actrc` に共通設定が書かれており、`act` 実行時に自動で読み込まれます。
 
@@ -400,14 +426,15 @@ act pull_request \
 | --- | --- |
 | PR コメント投稿 | GitHub API を呼ぶため失敗するが CI 結果には影響しない |
 | 変更ファイル検出 | `git diff` がローカルの状態を返す（origin/main との差分） |
-| S3 バックエンド | `TF_CLI_ARGS_init=-backend=false` で無効化済み |
+| S3 バックエンド | 無効化はされていない。`local/start.sh` が起動する MinIO を実際に使う（事前に起動が必要） |
 | `environment: production` ゲート | ローカルではスキップされる |
 
 ---
 
 ## 5. 全サービス起動
 
-`local/start.sh` で Authentik・kind を一括起動できます。
+`local/start.sh` で Authentik・MinIO（S3 互換 State バックエンド）・kind を
+一括起動できます（初回は `tfstate` バケットの作成、Authentik の `.env` 自動生成も行う）。
 
 ```bash
 bash local/start.sh

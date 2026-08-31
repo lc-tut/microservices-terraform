@@ -36,6 +36,30 @@ apply はスタック間の依存関係に従ってフェーズ順に実行し�
 
 ## GitHub Actions ワークフロー
 
+> **注意（実装との乖離）**: 以下の `plan.yml`・`apply.yml`・`modules-check.yml`・
+> `codeowners-check.yml` のコード例は、全体の設計思想（フェーズ順 apply・PR ベース・
+> CODEOWNERS 承認ゲート）は実装と一致していますが、細部は実ファイルと異なります。
+> - `terraform_version: "~1.9"` → 実際は `"~1.10"`
+> - 各ワークフローに `メンバーファイル復号`（`scripts/decrypt-members.sh` を実行）
+>   ステップが `SOPS復号キー設定` の直後に追加されている（`terraform/platform/members/`
+>   の `*.yaml.enc` を復号してから plan/apply する必要があるため）
+> - セキュリティスキャンは `tfsec . && checkov -d .` を validate ステップ内で
+>   直接実行するのではなく、`aquasecurity/tfsec-action@v1.0.3`（`soft_fail: true`）を
+>   別ステップとして使う方式に変更（`checkov` は使っていない）
+> - Plan/Apply ステップの `env` に `GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}`
+>   が追加されている（`terraform/platform/github/` の GitHub provider 用）
+> - `codeowners-check.yml` は `fetch-depth: 0` を指定せず、
+>   `multimediallc/codeowners-plus@v1` には `base_ref` ではなく
+>   `token: ${{ github.token }}` を渡している
+>
+> また、このドキュメント作成後に以下の2ワークフローが追加されています
+> （詳細は下の「その他のワークフロー」節参照）。
+> - `.github/workflows/authentik-dispatch.yml` — Authentik からの
+>   `repository_dispatch` を受けて `auto-gen-members.yaml` 等を自動更新
+>   （`03-member-management.md` 参照）
+> - `.github/workflows/ensure-admin-codeowners.yml` — `terraform/workspaces/**/.codeowners`
+>   の変更 PR に `@lc-tut/circle-admin` が含まれていなければ自動で先頭に追記してコミット
+
 ### plan ワークフロー（PR トリガー）
 
 ```yaml
@@ -519,6 +543,31 @@ jobs:
           # workspaces 配下の .codeowners を対象に検証
           base_ref: ${{ github.base_ref }}
 ```
+
+---
+
+## その他のワークフロー
+
+### authentik-dispatch.yml（Authentik からの repository_dispatch 受信）
+
+Authentik の Webhook（`terraform/platform/idp/notification_transports.tf`）が
+GitHub の `repository_dispatch` API を叩き、以下の3イベントを処理します。
+
+- `authentik-enrollment-completed`: 新規ユーザーの username・pk を
+  `auto-gen-members.yaml` に追記してコミット・プッシュ
+- `authentik-source_linked` / `authentik-source_unlinked`（GitHub 連携）:
+  `auto-gen-github-usernames.yaml` を更新してコミット・プッシュ
+
+CODEOWNERS 承認を経る通常の PR フローとは異なり、Bot（`authentik-bot`）が
+`[skip ci]` 付きで直接 `main` にコミット・プッシュします。詳細は
+`03-member-management.md` の「Bot 自動更新フロー」参照。
+
+### ensure-admin-codeowners.yml
+
+`terraform/workspaces/**/.codeowners` の変更を含む PR で、変更された
+`.codeowners` ファイルに `@lc-tut/circle-admin` が含まれていなければ
+自動で先頭行に追記してコミット・プッシュします（管理者の承認権限が
+誤って外れることを防ぐガード）。
 
 ---
 
