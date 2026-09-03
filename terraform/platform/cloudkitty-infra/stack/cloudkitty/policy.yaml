@@ -1,3 +1,0 @@
-# CloudKitty のポリシーはデフォルト（hashmap 書き込みは role:admin）で運用する。
-# terraform/platform/cloudkitty/ が使う Polaris app-cred トークンは admin プロジェクト・
-# admin ロールなので許可される。上書きが必要になったらここに追記する。

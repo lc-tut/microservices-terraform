@@ -22,16 +22,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - id: detect
         run: |
-          changed=$(git diff --name-only HEAD~1 HEAD)
+          # HEAD~1 HEAD だと push に複数コミットが含まれる場合に
+          # 最後の1コミットしか diff されず、途中のコミットの変更が
+          # 無視されてしまう（実際に踏んだ）。push イベントの before/after
+          # レンジ全体を見る。force-push 等で before が存在しない場合は
+          # HEAD~1 にフォールバックする。
+          before="${{ github.event.before }}"
+          if ! git cat-file -e "$before" 2>/dev/null; then
+            before="HEAD~1"
+          fi
+          changed=$(git diff --name-only "$before" "${{ github.event.after }}")
 
-          phase1=$(echo "$changed" \
-            | grep -E '^terraform/platform/' \
-            | awk -F'/' '{print $1"/"$2"/"$3}' \
-            | sort -u \
+          # platform/ は backend.tf を持つ最も近い祖先ディレクトリを root module
+          # とする（idp/ のようなフラット構成と openstack/quotas/ のような
+          # ネスト構成が混在するため。scripts/detect-platform-stacks.sh 参照）
+          phase1=$(echo "$changed" | scripts/detect-platform-stacks.sh \
             | jq -R -s -c 'split("\n")[:-1]')
 
           phase2=$(echo "$changed" \

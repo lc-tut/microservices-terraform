@@ -1,0 +1,291 @@
+#cloud-config
+# terraform/platform/infra/cloudkitty-infra が生成。手で編集しても apply で上書きされる。
+#
+# データ経路: cloudkitty-processor が collector_prometheus 経由で
+# 外部の Prometheus（terraform/platform/infra/prometheus-infra/ が構築、
+# var.prometheus_url）へ PromQL クエリを投げ、hashmap レーティングを適用して
+# InfluxDB に書く。cloudkitty-api が Keystone カタログの rating エンドポイントを
+# 提供し、terraform/platform/openstack/cloudkitty/ がそこへ Hashmap ルールを
+# 流し込む。
+
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - 1.1.1.1
+    - 8.8.8.8
+
+write_files:
+  - path: /opt/cloudkitty/docker-compose.yml
+    permissions: "0644"
+    content: |
+      name: cloudkitty
+
+      x-kolla-image: &ck_image_api quay.io/openstack.kolla/cloudkitty-api:${ck_image_tag}
+      x-kolla-image-proc: &ck_image_proc quay.io/openstack.kolla/cloudkitty-processor:${ck_image_tag}
+
+      services:
+        mariadb:
+          image: ${mariadb_image}
+          restart: unless-stopped
+          environment:
+            MARIADB_ROOT_PASSWORD: "${mariadb_root_password}"
+            MARIADB_DATABASE: cloudkitty
+            MARIADB_USER: cloudkitty
+            MARIADB_PASSWORD: "${ck_db_password}"
+          volumes:
+            - mariadb-data:/var/lib/mysql
+          healthcheck:
+            test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+            interval: 10s
+            timeout: 5s
+            retries: 20
+
+        influxdb:
+          image: ${influxdb_image}
+          restart: unless-stopped
+          environment:
+            INFLUXDB_DB: cloudkitty
+            INFLUXDB_HTTP_AUTH_ENABLED: "false"
+            INFLUXDB_REPORTING_DISABLED: "true"
+          volumes:
+            - influxdb-data:/var/lib/influxdb
+          healthcheck:
+            test: ["CMD", "curl", "-sf", "http://localhost:8086/ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 20
+
+        ck-dbsync:
+          image: *ck_image_api
+          entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-dbsync"]
+          command: ["upgrade"]
+          user: "0"
+          volumes:
+            - /opt/cloudkitty/cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+          depends_on:
+            mariadb:
+              condition: service_healthy
+          restart: "no"
+
+        ck-storage-init:
+          image: *ck_image_api
+          entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-storage-init"]
+          user: "0"
+          volumes:
+            - /opt/cloudkitty/cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+          depends_on:
+            influxdb:
+              condition: service_healthy
+            ck-dbsync:
+              condition: service_completed_successfully
+          restart: "no"
+
+        cloudkitty-api:
+          image: *ck_image_api
+          entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-api"]
+          command: ["--host", "0.0.0.0", "--port", "8889"]
+          user: "0"
+          restart: unless-stopped
+          volumes:
+            - /opt/cloudkitty/cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+            - /opt/cloudkitty/cloudkitty/metrics.yml:/etc/cloudkitty/metrics.yml:ro
+            - /opt/cloudkitty/cloudkitty/policy.yaml:/etc/cloudkitty/policy.yaml:ro
+          ports:
+            - "8889:8889"
+          depends_on:
+            ck-dbsync:
+              condition: service_completed_successfully
+            ck-storage-init:
+              condition: service_completed_successfully
+
+        cloudkitty-processor:
+          image: *ck_image_proc
+          entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-processor"]
+          user: "0"
+          restart: unless-stopped
+          volumes:
+            - /opt/cloudkitty/cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+            - /opt/cloudkitty/cloudkitty/metrics.yml:/etc/cloudkitty/metrics.yml:ro
+            - /opt/cloudkitty/cloudkitty/policy.yaml:/etc/cloudkitty/policy.yaml:ro
+          depends_on:
+            cloudkitty-api:
+              condition: service_started
+
+      volumes:
+        mariadb-data:
+        influxdb-data:
+
+  - path: /opt/cloudkitty/cloudkitty/cloudkitty.conf
+    permissions: "0644"
+    content: |
+      [DEFAULT]
+      debug = false
+      use_stderr = true
+      # api/processor 間 RPC は使わない。通知も出さない。
+      transport_url = fake://
+
+      [oslo_messaging_notifications]
+      driver = noop
+
+      [api]
+      host_ip = 0.0.0.0
+      port = 8889
+
+      [database]
+      connection = mysql+pymysql://cloudkitty:${ck_db_password}@mariadb:3306/cloudkitty?charset=utf8
+
+      [keystone_authtoken]
+      www_authenticate_uri = ${keystone_auth_url}
+      auth_url = ${keystone_auth_url}
+      auth_type = password
+      project_domain_name = Default
+      user_domain_name = Default
+      project_name = ${os_admin_project_name}
+      username = ${os_admin_username}
+      password = ${os_admin_password}
+      region_name = ${os_region_name}
+      service_token_roles_required = false
+      memcache_servers =
+
+      [collect]
+      collector = prometheus
+      scope_key = project_id
+      metrics_conf = /etc/cloudkitty/metrics.yml
+      period = 3600
+      # 直近 period をすぐ処理させる（既定 2）
+      wait_periods = 0
+
+      [fetcher]
+      backend = keystone
+
+      [fetcher_keystone]
+      keystone_version = 3
+      ignore_rating_role = true
+      ignore_disabled_tenants = true
+      auth_type = password
+      auth_url = ${keystone_auth_url}
+      project_domain_name = Default
+      user_domain_name = Default
+      project_name = ${os_admin_project_name}
+      username = ${os_admin_username}
+      password = ${os_admin_password}
+      region_name = ${os_region_name}
+
+      [collector_prometheus]
+      prometheus_url = ${prometheus_url}
+
+      [storage]
+      backend = influxdb
+      version = 2
+
+      [storage_influxdb]
+      host = influxdb
+      port = 8086
+      database = cloudkitty
+      version = 1
+      use_ssl = false
+
+      [rating]
+      # hashmap モジュールは runcmd が API 経由で enable する。
+
+  - path: /opt/cloudkitty/cloudkitty/metrics.yml
+    permissions: "0644"
+    content: |
+      # CloudKitty collector（prometheus）のメトリクス定義。
+      # キー = Prometheus 側の系列名（infra/prometheus-infra の recording rule）。
+      # alt_name = CloudKitty 内部のサービス名。terraform/platform/openstack/cloudkitty/ の
+      #            Hashmap ルール（modules/cloudkitty-service の service_name）と一致させる。
+      metrics:
+        cloudkitty:vcpu:used:
+          alt_name: vcpu
+          unit: vcpu
+          groupby:
+            - project_id
+          extra_args:
+            aggregation_method: max
+
+        cloudkitty:memory_gb:used:
+          alt_name: memory
+          unit: GiB
+          groupby:
+            - project_id
+          extra_args:
+            aggregation_method: max
+
+        cloudkitty:volume_gb:used:
+          alt_name: volume
+          unit: GiB
+          groupby:
+            - project_id
+          extra_args:
+            aggregation_method: max
+
+        cloudkitty:floating_ip:count:
+          alt_name: floating_ip
+          unit: ip
+          groupby:
+            - project_id
+          extra_args:
+            aggregation_method: max
+
+  - path: /opt/cloudkitty/cloudkitty/policy.yaml
+    permissions: "0644"
+    content: |
+      # CloudKitty のポリシーはデフォルト（hashmap 書き込みは role:admin）で運用する。
+
+  - path: /etc/systemd/system/cloudkitty.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=CloudKitty (docker compose)
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/cloudkitty
+      ExecStart=/usr/bin/docker compose up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose down
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # Docker CE は 2026 時点で Rocky/EL10 向け RPM を未提供
+  # （terraform/platform/infra/idp-infra/templates/cloud-init.yaml.tftpl と同じ罠・同じ回避策）。
+  - path: /etc/yum.repos.d/docker-ce.repo
+    permissions: "0644"
+    content: |
+      [docker-ce-stable]
+      name=Docker CE Stable - EL9 (pinned; EL10 packages not yet published)
+      baseurl=https://download.docker.com/linux/centos/9/x86_64/stable
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://download.docker.com/linux/centos/gpg
+
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "firewall-backend": "nftables"
+      }
+
+  - path: /etc/sysctl.d/99-docker-forward.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+runcmd:
+  - [bash, -c, "systemctl disable --now firewalld 2>/dev/null || true"]
+  - [bash, -c, "sysctl -p /etc/sysctl.d/99-docker-forward.conf"]
+  - [bash, -c, "dnf -y install dnf-plugins-core || true"]
+  - [bash, -c, "for i in 1 2 3 4 5; do dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin && break; echo 'docker install retry'; sleep 20; done"]
+  - [systemctl, enable, "--now", docker]
+  - [bash, -c, "cd /opt/cloudkitty && for i in 1 2 3; do docker compose pull && break; sleep 20; done"]
+  - [systemctl, enable, "--now", cloudkitty.service]
+  # hashmap レーティングモジュールを有効化（冪等。API 起動待ちのためリトライ）
+  - [bash, -c, "for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8889/ && break; sleep 5; done"]
+  - [bash, -c, "TOKEN=$(curl -s -D- -o /dev/null -X POST ${keystone_auth_url}/v3/auth/tokens -H 'Content-Type: application/json' -d '{\"auth\":{\"identity\":{\"methods\":[\"password\"],\"password\":{\"user\":{\"name\":\"${os_admin_username}\",\"domain\":{\"name\":\"Default\"},\"password\":\"${os_admin_password}\"}}},\"scope\":{\"project\":{\"name\":\"${os_admin_project_name}\",\"domain\":{\"name\":\"Default\"}}}}}' | awk -F': ' '/^x-subject-token/{print $2}' | tr -d '\\r'); curl -s -o /dev/null -X PUT http://127.0.0.1:8889/v1/rating/modules/hashmap -H \"X-Auth-Token: $TOKEN\" -H 'Content-Type: application/json' -d '{\"module_id\":\"hashmap\",\"enabled\":true}' -w 'hashmap enable PUT -> HTTP %%{http_code} (302/200 ならOK)\\n'"]
+  - [bash, -c, "echo \"cloudkitty-infra bootstrap finished at $(date -Is)\" > /opt/cloudkitty/.bootstrapped"]

@@ -50,7 +50,7 @@ terraform.rc
 terraform/local-override.tf
 
 # idp-infra が生成する Authentik VM の SSH 秘密鍵
-terraform/platform/idp-infra/.ssh/
+terraform/platform/infra/idp-infra/.ssh/
 
 # ローカル開発環境の秘密情報
 local/authentik/.env
@@ -60,11 +60,11 @@ local/clouds.yaml
 local/polaris-access.md
 local/polaris/
 
-# CloudKitty 基盤スタックのレンダリング済み設定・認証情報
-terraform/platform/cloudkitty-infra/stack/.env
-terraform/platform/cloudkitty-infra/stack/openstack/clouds.yaml
-terraform/platform/cloudkitty-infra/stack/cloudkitty/cloudkitty.conf
-terraform/platform/cloudkitty-infra/.ssh/
+# CloudKitty 基盤 VM の SSH 秘密鍵（idp-infra と同じ方針。設定自体は
+# cloud-init 経由で Terraform state にのみ保存され、リポジトリには含まれない）
+terraform/platform/infra/cloudkitty-infra/.ssh/
+# prometheus-infra（cloudkitty-infra から分離した Prometheus 基盤）
+terraform/platform/infra/prometheus-infra/.ssh/
 local/gcp-devstack/windows-autostop/config.env
 local/gcp-devstack/windows-autostop/*.vbs
 local/.secrets

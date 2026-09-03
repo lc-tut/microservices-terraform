@@ -227,12 +227,17 @@ resource "authentik_stage_prompt_field" "recommend_connect" {
   field_key = "recommend_connect_info"
   label     = "GitHub・Discord連携のご案内"
   type      = "static"
-  sub_text  = <<-TEXT
+  # 実機確認済み（2026-09-04）: Authentik は保存時に末尾の改行を取り除くため、
+  # ヒアドキュメントの末尾改行をそのまま送ると terraform plan が永久に
+  # 「1 to change」を示し続ける（送信→保存時に切り詰め→次の refresh で
+  # 差分検出→再送信、の無限ループ）。chomp() で末尾改行を明示的に除去する。
+  sub_text = chomp(<<-TEXT
     GitHub・Discord アカウントの連携は任意ですが、連携しておくと
     Organization への招待や OB/OG 向け Discord ロールの自動付与がスムーズになります。
     後からいつでも「Connected Sources」画面（ユーザー設定）から連携できます。
   TEXT
-  order     = 100
+  )
+  order = 100
 
   # static 型フィールドは placeholder が送信値のデフォルトになる（画面上の
   # プレースホルダーとしては使われない）。空文字のままだと送信時に

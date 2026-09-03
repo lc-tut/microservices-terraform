@@ -24,14 +24,19 @@ jobs:
 
       - id: detect
         run: |
-          stacks=$(git diff --name-only origin/main \
-            | grep -E '^terraform/(platform|catalog|workspaces)/' \
-            | awk -F'/' '
-                $2=="platform"  { print $1"/"$2"/"$3 }
-                $2=="catalog"   { print $1"/"$2"/"$3"/"$4 }
-                $2=="workspaces"{ print $1"/"$2"/"$3"/"$4 }
-              ' \
-            | sort -u \
+          changed=$(git diff --name-only origin/main)
+
+          # platform/ は backend.tf を持つ最も近い祖先ディレクトリを root module
+          # とする（idp/ のようなフラット構成と openstack/quotas/ のような
+          # ネスト構成が混在するため。scripts/detect-platform-stacks.sh 参照）
+          platform_stacks=$(echo "$changed" | scripts/detect-platform-stacks.sh)
+
+          other_stacks=$(echo "$changed" \
+            | grep -E '^terraform/(catalog|workspaces)/' \
+            | awk -F'/' '{print $1"/"$2"/"$3"/"$4}')
+
+          stacks=$(printf '%s\n%s\n' "$platform_stacks" "$other_stacks" \
+            | grep -v '^$' | sort -u \
             | jq -R -s -c 'split("\n")[:-1]')
           echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
 

@@ -15,8 +15,8 @@ resource "authentik_user" "members" {
   name     = each.key
   email    = local.secrets[each.key].email
 
-  # active は既存通り false のまま維持（is_active の既存挙動には手を入れない）。
-  # alumni は連絡不要という意思表示のため false
+  # active は初期状態 false・ob-og は true。alumni は連絡不要という
+  # 意思表示のため false（初回設定完了後の挙動は下記 ignore_changes 参照）
   is_active = each.value.status == "ob-og" ? true : false
 
   groups = (
@@ -33,7 +33,14 @@ resource "authentik_user" "members" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [username, name]
+    # username・name は enrollment 後にメンバー自身が変更する → drift を無視。
+    # is_active も同様に無視する: welcome-email 経由で本人が初回パスワード
+    # 設定を完了すると activate_user_on_success により Authentik 側が
+    # false→true へ書き換える（recovery.tf の needs_welcome_intro と同じ
+    # has_usable_password() ベースの設計）。ここで管理し続けると、実際に
+    # アクティブ化されたアカウントを次の apply で false に巻き戻してしまう
+    # バグを実機で発見（2026-09-04）
+    ignore_changes = [username, name, is_active]
   }
 }
 

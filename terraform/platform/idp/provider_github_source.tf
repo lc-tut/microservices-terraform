@@ -19,4 +19,9 @@ resource "authentik_source_oauth" "github" {
   enrollment_flow     = null
 
   user_matching_mode = "identifier"
+
+  # 実機確認済み（2026-09-04）: provider_type="github" だと Authentik サーバー側が
+  # このデフォルト値を勝手に埋めて返してくる。config で null のままにしておくと
+  # 毎回 plan が drift を検出し続けるため、実際に返ってくる値を明示しておく
+  oidc_jwks_url = "https://token.actions.githubusercontent.com/.well-known/jwks"
 }

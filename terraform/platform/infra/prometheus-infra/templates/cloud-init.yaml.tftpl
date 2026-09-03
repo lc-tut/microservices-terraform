@@ -1,0 +1,186 @@
+#cloud-config
+# terraform/platform/infra/prometheus-infra が生成。手で編集しても apply で上書きされる。
+#
+# terraform/platform/infra/cloudkitty-infra/ から分離した Prometheus 基盤。
+# CloudKitty 用の使用量メトリクス収集のほか、他用途の監視にも再利用できる
+# 汎用インスタンスとして独立させている。
+
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - 1.1.1.1
+    - 8.8.8.8
+
+write_files:
+  - path: /opt/prometheus/docker-compose.yml
+    permissions: "0644"
+    content: |
+      name: prometheus
+
+      services:
+        openstack-exporter:
+          image: ${openstack_exporter_image}
+          restart: unless-stopped
+          command:
+            - --os-client-config=/etc/openstack/clouds.yaml
+            - --endpoint-type=public
+            - --collect-metric-time
+            - openstack
+          volumes:
+            - /opt/prometheus/openstack/clouds.yaml:/etc/openstack/clouds.yaml:ro
+          expose:
+            - "9180"
+
+        prometheus:
+          image: ${prometheus_image}
+          restart: unless-stopped
+          command:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.retention.time=${prometheus_retention}
+            - --web.enable-lifecycle
+          volumes:
+            - /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+            - /opt/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+            - prometheus-data:/prometheus
+          ports:
+            - "9090:9090"
+          depends_on:
+            - openstack-exporter
+
+      volumes:
+        prometheus-data:
+
+  - path: /opt/prometheus/openstack/clouds.yaml
+    # 0600 だとコンテナ内の非 root ユーザーから読めず
+    # "permission denied" で openstack-exporter が起動失敗する（実機確認済み・
+    # 2026-09-04）。VM 自体は rocky/root のみが使う前提のため 0644 で妥協する。
+    permissions: "0644"
+    content: |
+      # openstack-exporter が環境全体の使用量を読むための認証情報。
+      # admin ロールがあれば admin プロジェクトスコープで全テナントの limits を取得できる。
+      clouds:
+        openstack:
+          auth:
+            auth_url: ${keystone_auth_url}
+            username: ${os_admin_username}
+            password: ${os_admin_password}
+            project_name: ${os_admin_project_name}
+            project_domain_name: Default
+            user_domain_name: Default
+          region_name: ${os_region_name}
+          interface: public
+          identity_api_version: 3
+
+  - path: /opt/prometheus/prometheus.yml
+    permissions: "0644"
+    content: |
+      global:
+        scrape_interval: ${openstack_exporter_scrape_interval}
+        evaluation_interval: ${openstack_exporter_scrape_interval}
+
+      rule_files:
+        - /etc/prometheus/rules.yml
+
+      scrape_configs:
+        - job_name: openstack-exporter
+          scrape_interval: ${openstack_exporter_scrape_interval}
+          static_configs:
+            - targets: ["openstack-exporter:9180"]
+
+  - path: /opt/prometheus/rules.yml
+    permissions: "0644"
+    content: |
+      # CloudKitty prometheus collector 向けの正規化レイヤー。
+      #
+      # CloudKitty の collector は `<metric>{project_id="<id>"}[<period>s]` という
+      # 固定形のクエリしか組み立てられない（label_replace 等を差し込めない）。
+      # そのため openstack-exporter が付ける tenant_id ラベルを project_id に寄せ、
+      # 1 プロジェクト 1 系列に集約したものをここで用意し、CloudKitty からはこれを引く。
+      #
+      # 単価は documents/terraform/09-costs.md（1 Credit = 1 vCPU-hour 基準）:
+      #   vCPU 1.000 / RAM 0.250(GB-h) / Block 0.002(GB-h) / Floating IP 0.500(IP-h)
+      groups:
+        - name: cloudkitty-normalize
+          interval: ${openstack_exporter_scrape_interval}
+          rules:
+            - record: cloudkitty:vcpu:used
+              expr: >-
+                max by (project_id) (
+                  label_replace(openstack_nova_limits_vcpus_used, "project_id", "$1", "tenant_id", "(.+)")
+                )
+
+            - record: cloudkitty:memory_gb:used
+              expr: >-
+                max by (project_id) (
+                  label_replace(openstack_nova_limits_memory_used, "project_id", "$1", "tenant_id", "(.+)")
+                ) / 1024
+
+            - record: cloudkitty:volume_gb:used
+              expr: >-
+                max by (project_id) (
+                  label_replace(openstack_cinder_limits_volume_used_gb, "project_id", "$1", "tenant_id", "(.+)")
+                )
+
+            - record: cloudkitty:floating_ip:count
+              expr: count by (project_id) (openstack_neutron_floating_ip)
+
+  - path: /etc/systemd/system/prometheus.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Prometheus + openstack-exporter (docker compose)
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/prometheus
+      ExecStart=/usr/bin/docker compose up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose down
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # Docker CE は 2026 時点で Rocky/EL10 向け RPM を未提供
+  # （terraform/platform/infra/idp-infra/templates/cloud-init.yaml.tftpl と同じ罠・同じ回避策）。
+  - path: /etc/yum.repos.d/docker-ce.repo
+    permissions: "0644"
+    content: |
+      [docker-ce-stable]
+      name=Docker CE Stable - EL9 (pinned; EL10 packages not yet published)
+      baseurl=https://download.docker.com/linux/centos/9/x86_64/stable
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://download.docker.com/linux/centos/gpg
+
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "firewall-backend": "nftables"
+      }
+
+  - path: /etc/sysctl.d/99-docker-forward.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+runcmd:
+  - [bash, -c, "systemctl disable --now firewalld 2>/dev/null || true"]
+  # Rocky Linux は既定で cockpit.socket が 9090 を握っている。Prometheus を
+  # 同じホストポートで公開するので先に明け渡す（実機確認済み・2026-09-04）。
+  - [bash, -c, "systemctl disable --now cockpit.socket cockpit.service 2>/dev/null || true"]
+  - [bash, -c, "sysctl -p /etc/sysctl.d/99-docker-forward.conf"]
+  - [bash, -c, "dnf -y install dnf-plugins-core || true"]
+  - [bash, -c, "for i in 1 2 3 4 5; do dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin && break; echo 'docker install retry'; sleep 20; done"]
+  - [systemctl, enable, "--now", docker]
+  - [bash, -c, "cd /opt/prometheus && for i in 1 2 3; do docker compose pull && break; sleep 20; done"]
+  - [systemctl, enable, "--now", prometheus.service]
+  # 稀に cockpit との競合直後の初回起動でポート公開に失敗し、compose restart
+  # だけでは復旧しないことがある（docker-proxy が立たないまま）。念のため
+  # down→up で作り直して確実に公開させる（実機確認済み・2026-09-04）。
+  - [bash, -c, "cd /opt/prometheus && docker compose down && docker compose up -d"]
+  - [bash, -c, "echo \"prometheus-infra bootstrap finished at $(date -Is)\" > /opt/prometheus/.bootstrapped"]

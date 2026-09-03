@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket = "linuxclub-tfstate"
-    key    = "tfstate/terraform/platform/github/terraform.tfstate"
+    key    = "tfstate/terraform/platform/openstack/cloudkitty/terraform.tfstate"
     region = "us-east-1"
 
     use_lockfile = true
