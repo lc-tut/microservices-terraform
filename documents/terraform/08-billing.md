@@ -79,6 +79,37 @@ LC-Cloud (OpenStack)
 
 ## Terraform での実装（カスタマイズ時のみ）
 
+> **注意（実装との乖離・2026-09-03 調査）**: `lc_cloud_personal_organization`・
+> `lc_cloud_organization`・`lc_cloud_budget` は**どの Terraform Provider にも
+> 存在しません**。「予算上限・Credit 残高を持つ Organization」という概念自体、
+> Keystone の project にも CloudKitty にも相当する標準機能が無く、まるごと
+> 自前実装が必要です（独自 DB か Middleware API 側での実装を想定。
+> 未着手）。同様に「複数のコスト源（OpenStack・Kubernetes 等）を Organization
+> 単位で合算する」処理も、CloudKitty 自身は行ってくれないため自前実装が必要です。
+> 詳細は `09-costs.md` の同種の注記、および
+> `documents/terraform/16-implementation-phases.md` の
+> 「[P5] CloudKitty の導入方針」を参照してください。
+> 現状 Terraform で実際に操作できるのは CloudKitty の Hashmap レーティング
+> ルール（`terraform/platform/cloudkitty/`・`modules/cloudkitty-service/`、
+> 実機検証済み）までで、それより上のクォータ設定（`modules/lc-cloud-quota`）は
+> `project_id` があれば動きますが、予算・Organization 周りはこのドキュメントの
+> 設計イメージのみです。
+>
+> **CloudKitty がやってくれる範囲 と 自前実装が要る範囲の線引き**:
+>
+> | 機能 | CloudKitty で足りる？ | 備考 |
+> |---|---|---|
+> | メトリクス（使用量）×単価＝金額の計算 | ✅ 足りる | Hashmap ルールとして実装・実機検証済み |
+> | OpenStack リソース1種別ごとの金額算出 | ✅ 足りる | `terraform/platform/cloudkitty/`（Gnocchi collector） |
+> | Kubernetes namespace 単位の金額算出 | ✅ 足りる（別インスタンスとして） | 未着手。Prometheus collector・`scope_attribute=namespace` |
+> | 「Organization」という概念（project + 予算上限 + Credit残高） | ❌ 自前実装が要る | Keystone project にも CloudKitty にも該当メタデータが無い。独自 DB か Middleware API 側のデータモデルとして持つ想定 |
+> | 複数 CloudKitty インスタンス（OpenStack用・K8s用）の結果を Organization 単位で合算 | ❌ 自前実装が要る | CloudKitty は自分が計算した範囲しか知らず、他インスタンスの結果を横断して見に行く機能が無い。Middleware API 側でのバッチ集計を想定 |
+> | 予算 80% 到達で警告・100% 到達で新規作成ブロック | ❌ 自前実装が要る | CloudKitty の `limit.rate` モジュールは単一インスタンス内・単一メトリクスの制御のみで、複数ソース合算後の判定はできない。Middleware API + OpenStack API 連携で実装する想定 |
+> | K8s namespace ↔ OpenStack project の対応関係の解決 | ❌ 自前実装が要る | CloudKitty はこの対応関係自体を知らない。「1 project = 1 namespace（同名）」等の運用規約をどこかのコードで解決する必要がある（Prometheus の relabel 設定 or Middleware API 側のマッピングテーブル） |
+>
+> つまり CloudKitty は表の上2行（金額計算そのもの）だけを担い、それより上の
+> 「予算・Organization」という集計・管理レイヤーは丸ごと未着手です。
+
 `catalog/billing-accounts/` のファイルはデフォルトから変更が必要な場合のみ作成します。
 すでに LC-Cloud 上にプロジェクトが存在するため、`data` ソースで参照します。
 

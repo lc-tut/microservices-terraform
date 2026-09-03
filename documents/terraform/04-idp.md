@@ -9,6 +9,13 @@ Terraform での管理には
 [goauthentik/terraform-provider-authentik](https://registry.terraform.io/providers/goauthentik/authentik/latest/docs)
 を使用します。別途 image や独自 provider は不要です。
 
+`terraform/platform/idp/` は「Authentik に何を設定するか」（flow / stage / brand /
+group 等）を宣言します。**Authentik インスタンスそのもの**（VM・コンテナ）を
+Polaris 上に構築するのは `terraform/platform/idp-infra/` です（`17-production-runbook.md`
+Phase 2-1 参照）。`idp/` の `authentik_url` / `authentik_token` には `idp-infra` の
+`terraform output` の値を渡します。ローカル開発では `local/authentik/` の
+Docker Compose 版を使います（`15-local-development.md`）。
+
 実際の `terraform/platform/idp/` はサブディレクトリの無いフラット構成で、
 ファイル名のプレフィックスで役割を表します（後述のコード例のパスコメントも
 これに合わせて読んでください）。このドキュメントで扱う核となるファイルは以下です

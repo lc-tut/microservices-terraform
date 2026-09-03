@@ -135,10 +135,41 @@ gh pr close --delete-branch <PR番号>
 
 ### 2-1. Authentik 本番インスタンスのデプロイ
 
-LC-Cloud Kubernetes クラスターに Authentik をデプロイします。
+#### 現状（最小構成 / 実機検証済み） — `terraform/platform/idp-infra/`
+
+Polaris（実機 OpenStack、Kolla-Ansible）には **Magnum / Octavia が無く**、
+マネージド Kubernetes 基盤が存在しない。そのため現状の最小構成は
+**単一 VM + Docker Compose** で、`terraform/platform/idp-infra/` が IaC 管理する。
+
+- `rocky-10` / `m1.medium`(4GB/2vCPU) / boot-from-volume 40GB / `lc-dev-net`
+- Floating IP を `ext-net` から採番、Security Group で 22 / 9000 / 9443 / ICMP を許可
+- cloud-init が Docker を入れ、`local/authentik/docker-compose.yml` を忠実移植した
+  構成（**server + worker + postgresql、Redis なし**）を起動する
+- `AUTHENTIK_SECRET_KEY` / postgres パスワード / akadmin パスワード / API トークンは
+  `random_*` で新規生成し tfstate（MinIO/Ceph S3）にのみ保存
 
 ```bash
-# Helm を使う場合
+export OS_CLIENT_CONFIG_FILE=/path/to/local/clouds.yaml   # lc-dev scope の cloud
+cd terraform/platform/idp-infra
+terraform init && terraform apply
+
+terraform output -raw authentik_url               # → 2-3 の TF_VAR_authentik_url
+terraform output -raw authentik_token             # → 2-2 の AUTHENTIK_TOKEN（手動発行不要）
+terraform output -raw authentik_akadmin_password  # akadmin Web ログイン用
+```
+
+> **食い違い注記**: `## 前提条件` の「LC-Cloud 上に K8s クラスターが存在すること」は
+> Polaris 実機ではまだ満たされていない。下記 Helm 手順は将来 K8s 基盤ができた
+> 時点の本番像であり、**未検証**。当面は上記 VM 構成で Phase 2 以降を進める。
+>
+> Rocky/EL10 は 2026 時点で Docker CE の EL10 向け RPM が未提供のため、cloud-init は
+> EL9 pinned repo + Docker の nftables firewall backend + `net.ipv4.ip_forward=1` で
+> 回避している（`terraform/platform/idp-infra/templates/cloud-init.yaml.tftpl` 参照）。
+
+#### 将来（K8s 基盤ができたら） — Helm
+
+```bash
+# Helm を使う場合（未検証。Redis は chart 同梱）
 helm repo add authentik https://charts.goauthentik.io
 helm repo update
 
@@ -154,14 +185,16 @@ helm upgrade --install authentik authentik/authentik \
 
 ### 2-2. Authentik API トークンの取得
 
-1. `https://auth.lc-cloud.example.internal` にブラウザでアクセス
-1. 初期セットアップウィザードを完了（管理者パスワードを設定）
-1. **Admin → Directory → Tokens → Create** で API トークンを作成
-1. 取得したトークンを GitHub Secret `AUTHENTIK_TOKEN` に上書き登録
+**VM 構成（現状）**: `idp-infra` が `AUTHENTIK_BOOTSTRAP_TOKEN` を注入して akadmin 用
+トークンを起動時に自動発行するため、手動発行は不要。
 
 ```bash
-gh secret set AUTHENTIK_TOKEN --body "<トークン>"
+gh secret set AUTHENTIK_TOKEN \
+  --body "$(cd terraform/platform/idp-infra && terraform output -raw authentik_token)"
 ```
+
+**Helm 構成（将来）**: 初期セットアップウィザードを完了し、
+**Admin → Directory → Tokens → Create** でトークンを作成して同様に登録する。
 
 ### 2-3. `terraform/platform/idp/` の apply
 
@@ -335,6 +368,21 @@ openstack token issue
 # GitHub Secret に正しい値が入っているか確認
 # （apply ログの OS_APPLICATION_CREDENTIAL_ID をチェック）
 ```
+
+### idp-infra: cloud-init で Docker が起動しない（Rocky/EL10）
+
+`journalctl -u docker.service` に以下が出る場合:
+
+- `Unable to find a match: docker-ce docker-ce-cli` … Docker CE の EL10 RPM が
+  まだ無い。`idp-infra` の cloud-init は EL9 pinned repo
+  (`download.docker.com/linux/centos/9/x86_64/stable`) で回避済み。
+- `addrtype ... missing kernel module` / `RULE_APPEND failed` … EL10 GenericCloud に
+  `kernel-modules-extra`（`xt_addrtype`）が無い。`/etc/docker/daemon.json` の
+  `"firewall-backend": "nftables"` で iptables 経路を使わず回避。
+- `IPv4 forwarding is disabled` … `/etc/sysctl.d/99-docker-forward.conf` で
+  `net.ipv4.ip_forward=1` を設定（cloud-init が投入済み。手動時は `sysctl --system`）。
+
+VM を作り直すには `terraform apply -replace=openstack_compute_instance_v2.authentik`。
 
 ### Authentik から Keystone に認証できない
 

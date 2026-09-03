@@ -371,27 +371,81 @@ terraform apply
 
 ### ✅ 追加解決済み
 
-**[P5] CloudKitty の導入方針 → restapi プロバイダーで IaC 管理**
+**[P5] CloudKitty の導入方針 → restapi プロバイダーで IaC 管理 ✅ 実装・実機検証済み（DevStack + Polaris 実機）**
 
-CloudKitty を OpenStack DevStack に追加し、Hashmap ルール（フレーバー別単価・ボリュームタイプ別単価・段階割引）を
-`Mastercard/terraform-provider-restapi` で管理する方針に決定。
+CloudKitty を OpenStack に追加し、Hashmap ルールを `Mastercard/terraform-provider-restapi` で
+管理する方針で実装。ローカル DevStack と **Polaris（実 OpenStack / Kolla-Ansible）** の両方で
+`terraform apply` 成功・`terraform plan` clean・CloudKitty API での実データ確認まで完了済み
+（`terraform/platform/cloudkitty/`・`terraform/modules/cloudkitty-service/`）。
+Polaris への基盤展開は `terraform/platform/cloudkitty-infra/`（lc-dev プロジェクトの
+VM 1 台に docker compose で CloudKitty 一式）。
 
 - **API**: Hashmap エンドポイントは CRUD が REST で完結しており、IaC 管理に適している
-- **プロバイダー**: `restapi` + `id_attribute` のドット記法（例: `mapping.mapping_id`）で対応可能
-- **UPDATE 問題**: CloudKitty の PUT が 302 を返すため、`force_new` を使って destroy → create で回避する
-- **モジュール化**: `modules/cloudkitty-service` として `service → field → mappings` を抽象化し、`for_each` でルール一覧を渡す設計
+- **プロバイダー**: `restapi_object` + `id_attribute`（`service_id`/`field_id`/`mapping_id`）で対応
+- **UPDATE 問題（訂正）**: 当初「PUT が 302 を返す」と想定していたが、実機検証の結果
+  **PUT は 405 Method Not Allowed**（services/fields/mappings いずれも更新不可）だった。
+  `force_new` で destroy → create にする対処自体は同じ
+- **その他、実機検証で判明した罠**: API パスは provider の `uri`（= サービスカタログの
+  rating エンドポイント URL）に対してさらに `/v1/rating/module_config/hashmap/...` を
+  足す（DevStack は URL が `.../rating` で終わる、Polaris はスタンドアロン
+  `http://<FIP>:8889` を直接登録。どちらもモジュールの path 定義でそのまま組み立つ）／
+  JSON フィールド名は `map_type` ではなく `type`／`ignore_server_additions = true` が必須
+  （無いとサーバー付加フィールドが永久に drift 扱いされる）
+- **モジュール化**: `modules/cloudkitty-service` として `service → field → mappings` を抽象化。
+  2 モード:
+  - **field モード**（`field_name != null`）: field の値ごとの mapping（`mappings`）。
+    例: `field_name = "flavor_id"` でフレーバー別単価。
+  - **service-level flat モード**（`field_name = null`）: service 直付けの単一 flat/rate
+    mapping（`service_rate`）。`09-costs.md` の vCPU/RAM/Block/Floating IP はこちら
+    （collector が既にプロジェクト単位の使用量そのものを qty として返すため、
+    field で値をマッチングする必要がない）。
 
 ```hcl
-module "compute_pricing" {
-  source       = "./modules/cloudkitty-service"
-  service_name = "compute"
-  field_name   = "flavor_id"
-  mappings = {
-    "m1.tiny"   = { cost = "0.005", type = "flat" }
-    "m1.small"  = { cost = "0.01",  type = "flat" }
-    "m1.medium" = { cost = "0.02",  type = "flat" }
-  }
+# Polaris 実機での実装（terraform/platform/cloudkitty/main.tf）。
+# service 名は collector(metrics.yml) の alt_name と一致させる。
+module "vcpu" {
+  source       = "../../modules/cloudkitty-service"
+  service_name = "vcpu"
+  service_rate = { cost = "1.000000", type = "flat" } # 1 Credit / vCPU-hour
+  providers    = { restapi.cloudkitty = restapi.cloudkitty }
 }
+# 同様に memory=0.25 / volume=0.002 / floating_ip=0.5
 ```
 
-実装タイミング: Phase 3（OpenStack platform）の一部として `terraform/platform/cloudkitty/` に追加予定。
+**OpenStack 側の collector（Polaris 実機で判明・重要な方針変更）**: 当初は DevStack と
+同じ **Gnocchi collector（Ceilometer + Gnocchi）** を想定していたが、Polaris（Kolla-Ansible）は
+`enable_ceilometer = no` で **nova / neutron の `[oslo_messaging_notifications] driver = noop`**。
+通知バスが無いため Ceilometer の標準パイプラインはコントロールプレーンを再設定しない限り
+何も集計できない。今回のスコープ（OpenStack 側のみ・コントロールプレーンには触れない）では
+**Prometheus collector** を採用した:
+
+- `openstack-exporter`（`ghcr.io/openstack-exporter/openstack-exporter:2.0.0-alpha`。
+  1.7.0 stable / 1.8.0-alpha は cinder メトリクスが無く不可）が Polaris の API を
+  読み取りだけで叩く → Prometheus。
+- Prometheus の **recording rule** で `tenant_id` → `project_id` に寄せ、
+  1 プロジェクト 1 系列へ集約（`cloudkitty:vcpu:used` 等）。CloudKitty の
+  prometheus collector は `<metric>{project_id="<id>"}[<period>s]` という固定形の
+  クエリしか組み立てられない（`label_replace` 等を差し込めない）ため、この正規化層が必須。
+- CloudKitty: `collector = prometheus` / `fetcher = keystone` / `storage = influxdb(v2 API)` /
+  `period = 3600`。
+- コントロールプレーン（lc-sv01〜03 の Kolla）には一切変更を加えていない。
+
+将来 Ceilometer/Gnocchi をコントロールプレーンに入れられるなら Gnocchi collector に
+戻してもよい（Hashmap ルール自体は collector 非依存。service 名 = metric の alt_name を
+合わせるだけ）。
+
+**Kubernetes（namespace 単位）のコスト管理について**: CloudKitty の `collector` と
+`scope_attribute` はいずれも1インスタンスにつき1つしか設定できないため、
+OpenStack 用と Kubernetes 用（`auth_strategy=noauth`・`scope_attribute=namespace`・
+kube-state-metrics 連携）で **別インスタンス**として構築する方針。両者とも `09-costs.md` の
+Credit 建て単価で計算することで、インスタンスは分かれていても同じ物差しで数字が出る。
+K8s 用インスタンスの実装はこれから（未着手・今回のスコープ外）。
+
+**未着手（別課題）**: 複数の CloudKitty インスタンス（OpenStack用・K8s用）の計算結果を
+「請求アカウント（Organization）」単位で合算し、予算と比較する仕組み。これは CloudKitty にも
+OpenStack 標準機能にも存在せず、まるごと自前実装が必要（Middleware API 側の実装課題として
+持ち越し。詳細は `08-billing.md`・`09-costs.md` の該当注記を参照）。
+
+実装タイミング: Phase 3（OpenStack platform）の一部として `terraform/platform/cloudkitty/` を追加。
+ローカル DevStack・Polaris（実 OpenStack 環境）ともに実機適用・`plan` clean 確認済み。
+Polaris 基盤の構築手順は `terraform/platform/cloudkitty-infra/README.md`。

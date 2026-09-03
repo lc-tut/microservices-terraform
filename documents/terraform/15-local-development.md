@@ -97,6 +97,20 @@ gcloud compute ssh $(terraform output -raw instance_name) \
 > `roles/iap.tunnelResourceAccessor` ロールが必要です。
 > `gcloud projects add-iam-policy-binding <project> --member=user:<you> --role=roles/iap.tunnelResourceAccessor`
 
+> **既知の問題（実機で発生確認済み・2026-09-01）**: `stack.sh` の初回実行が
+> Ubuntu の `apt-daily.timer`/`apt-daily-upgrade.timer`/`unattended-upgrades.service`
+> と `dpkg`/`debconf` のロック（`/var/lib/dpkg/lock-frontend` 等）を取り合い、
+> `Could not get lock` や `is locked by another process` で失敗することがある。
+> VM 作成直後の初回起動で発生しやすい。手動で `stack.sh` を再実行する場合は
+> 事前に次を実行しておくとよい:
+> ```bash
+> sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
+> sudo systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service
+> ```
+> `stack.sh` が `dpkg was interrupted` 等で異常終了した場合は
+> `sudo fuser /var/lib/dpkg/lock-frontend /var/cache/debconf/config.dat` で
+> ロック保持プロセスを特定し、`sudo dpkg --configure -a` で修復してから再実行する。
+
 ### 接続設定（IAP トンネル + clouds.yaml）
 
 ファイアウォールが IAP レンジのみ許可のため、ローカルから使う前に
@@ -522,6 +536,18 @@ gcloud compute ssh devstack-harbor --tunnel-through-iap --zone=<zone> \
 
 IAP トンネル（`start-tunnels.sh`）を閉じると SSH 接続が切れ、30 分後に
 VM が自動停止します。作業中はトンネルを開いたままにしてください。
+
+> **既知の弱点（実機で発生確認済み・2026-09-01）**: 判定は
+> `ss -tn state established '( sport = :22 )'` の**その瞬間のスナップショット**
+> なので、`gcloud compute ssh --command=...` を都度短時間だけ接続しては切る、
+> という使い方（自動化スクリプトからの定期ポーリング等）を続けていると、
+> 5分ごとのチェックタイミングでたまたま接続が確立していない瞬間が続き、
+> 実際には作業中でも「アイドル」と誤判定されて VM ごと電源断することがある。
+> 長時間かかる処理（`stack.sh` の再実行等）を走らせる間は、
+> `sudo systemctl stop idle-shutdown.timer && sudo systemctl mask idle-shutdown.timer`
+> で一時的に無効化し、作業後に
+> `sudo systemctl unmask idle-shutdown.timer && sudo systemctl enable --now idle-shutdown.timer`
+> で元に戻すこと。
 
 ### PC 側（補助）
 

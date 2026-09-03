@@ -94,58 +94,77 @@ CMU Campus Cloud などの学術クラウドの SU（Service Unit）設計を参
 
 ## Terraform 実装
 
-### CloudKitty 単価設定（platform/quotas/cloudkitty.tf）
+> **注意（実装との乖離・2026-09-03 調査 / 2026-09-03 Polaris 実機反映）**:
+>
+> - `openstack_rating_hashmap_service_v1`/`_field_v1`/`_mapping_v1` は
+>   **どの Terraform Provider にも存在しません**。実際は
+>   `terraform/modules/cloudkitty-service/`（`Mastercard/terraform-provider-restapi`
+>   経由で CloudKitty の Hashmap API を直接叩く方式）を使います。
+>   `terraform/platform/cloudkitty/` で実装し、ローカル DevStack と Polaris 実機の
+>   両方で apply・`plan` clean・API GET での確認まで済んでいます。
+> - `lc_cloud_budget`（下記「予算リソース」節）も存在しません。CloudKitty には
+>   「複数のコスト源を横断して合算し、予算と比較する」機能自体が無く、
+>   OpenStack 標準機能にも相当するものはありません。「Organization 単位での予算管理」は
+>   まるごと自前実装が必要な未着手の課題です（今回のスコープ外）。
+> - CloudKitty の `collector`・`scope_attribute` はいずれも **1 インスタンスにつき 1 つ**
+>   しか設定できないため、OpenStack 用と Kubernetes 用は別インスタンスにします
+>   （`documents/terraform/16-implementation-phases.md`「[P5]」参照）。
+> - **OpenStack 側 collector（Polaris 実機）**: 当初想定の Gnocchi ではなく
+>   **Prometheus collector**。Polaris(Kolla) は通知バス無効（`driver = noop`）で
+>   Ceilometer の標準パイプラインが使えず、コントロールプレーンには触れない方針のため。
+>   `openstack-exporter`(2.0.0-alpha) → Prometheus(recording rule で
+>   `tenant_id`→`project_id` 正規化) → CloudKitty。基盤は
+>   `terraform/platform/cloudkitty-infra/`（lc-dev の VM 1 台）。
+> - restapi_object 経由で Hashmap API を操作する際の罠（provider `uri` に rating
+>   エンドポイント URL をそのまま渡しモジュール側で `/v1/rating/module_config/hashmap/...`
+>   を足す・JSON フィールド名は `map_type` ではなく `type`・値変更は `force_new` で
+>   destroy→create・`ignore_server_additions = true` 必須）は
+>   `terraform/modules/cloudkitty-service/main.tf` のコメントにまとめてあります。
+
+### CloudKitty 単価設定（terraform/platform/cloudkitty/main.tf・Polaris 実機の実装）
+
+Prometheus collector はプロジェクト単位の使用量そのもの（vCPU 数・RAM GB・
+ボリューム GB・Floating IP 数）を qty として返すため、`field` で値をマッチングする
+必要はなく、**service 直付けの flat mapping**（`cloudkitty-service` モジュールの
+`service_rate` = `field_name` 省略時のモード）で単価を掛ける。`period = 3600` なので
+qty はそのまま「その 1 時間の使用量」を表し、`単価 × qty` が Credit/時になる。
+service 名は collector 設定（`metrics.yml` の `alt_name`）と一致させる。
 
 ```hcl
-# terraform/platform/quotas/cloudkitty.tf
-
-resource "openstack_rating_hashmap_service_v1" "compute" {
-  name = "compute"
+module "vcpu" {
+  source       = "../../modules/cloudkitty-service"
+  service_name = "vcpu"
+  service_rate = { cost = "1.000000", type = "flat" } # 1.000 Credit / vCPU-hour
+  providers    = { restapi.cloudkitty = restapi.cloudkitty }
 }
 
-resource "openstack_rating_hashmap_field_v1" "vcpu" {
-  service_id = openstack_rating_hashmap_service_v1.compute.id
-  name       = "vcpus"
+module "memory" {
+  source       = "../../modules/cloudkitty-service"
+  service_name = "memory"
+  service_rate = { cost = "0.250000", type = "flat" } # 0.250 Credit / GB-hour
+  providers    = { restapi.cloudkitty = restapi.cloudkitty }
 }
 
-resource "openstack_rating_hashmap_mapping_v1" "vcpu_rate" {
-  field_id = openstack_rating_hashmap_field_v1.vcpu.id
-  type     = "flat"
-  cost     = "1.0"   # 1 Credit / vCPU-hour
+module "volume" {
+  source       = "../../modules/cloudkitty-service"
+  service_name = "volume"
+  service_rate = { cost = "0.002000", type = "flat" } # 0.002 Credit / GB-hour（Cinder）
+  providers    = { restapi.cloudkitty = restapi.cloudkitty }
 }
 
-resource "openstack_rating_hashmap_field_v1" "ram" {
-  service_id = openstack_rating_hashmap_service_v1.compute.id
-  name       = "memory_mb"
-}
-
-resource "openstack_rating_hashmap_mapping_v1" "ram_rate" {
-  field_id = openstack_rating_hashmap_field_v1.ram.id
-  type     = "flat"
-  # 0.25 Credit/GB-hour = 0.000244 Credit/MB-hour
-  cost     = "0.000244"
-}
-
-resource "openstack_rating_hashmap_service_v1" "volume" {
-  name = "volume"
-}
-
-resource "openstack_rating_hashmap_mapping_v1" "volume_rate" {
-  service_id = openstack_rating_hashmap_service_v1.volume.id
-  type       = "flat"
-  cost       = "0.002"   # 0.002 Credit / GB-hour
-}
-
-resource "openstack_rating_hashmap_service_v1" "network_floating" {
-  name = "network.floating"
-}
-
-resource "openstack_rating_hashmap_mapping_v1" "floating_rate" {
-  service_id = openstack_rating_hashmap_service_v1.network_floating.id
-  type       = "flat"
-  cost       = "0.5"   # 0.5 Credit / IP-hour（未アタッチでも課金）
+module "floating_ip" {
+  source       = "../../modules/cloudkitty-service"
+  service_name = "floating_ip"
+  service_rate = { cost = "0.500000", type = "flat" } # 0.500 Credit / IP-hour
+  providers    = { restapi.cloudkitty = restapi.cloudkitty }
 }
 ```
+
+> オブジェクトストレージ（0.0005 Credit/GB-hour）は Polaris に Swift/S3(RGW) が
+> 無いため未設定。RGW 導入時に exporter メトリクスと `module "object_storage"` を足す。
+>
+> フレーバー別など「メタデータの値ごとに単価を変えたい」場合は同じモジュールの
+> **field モード**（`field_name = "flavor_id"` + `mappings = { ... }`）を使う。
 
 ### 予算リソース（catalog/billing-accounts/ で参照）
 
