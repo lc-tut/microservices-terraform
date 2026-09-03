@@ -1,0 +1,150 @@
+# Polaris 上の CloudKitty レーティング基盤（lc-dev プロジェクトの VM 1 台に集約）。
+#
+# データ経路:
+#   openstack-exporter --(Polaris API)--> Prometheus --(PromQL)--> cloudkitty-processor
+#     --(hashmap rating)--> InfluxDB   ;  cloudkitty-api が Keystone カタログの
+#     rating エンドポイント（http://<FIP>:8889）を提供し、terraform/platform/cloudkitty/
+#     がそこへ Hashmap ルールを流し込む。
+#
+# なぜ Ceilometer+Gnocchi ではなく Prometheus collector なのか:
+#   Polaris(Kolla) は enable_ceilometer=no で nova/neutron の
+#   [oslo_messaging_notifications] driver=noop。通知バスが無いので Ceilometer の
+#   標準パイプラインはコントロールプレーンを再設定しない限り集計できない。
+#   openstack-exporter は API 読み取りだけで完結し、コントロールプレーンに
+#   一切触れない。詳細は documents/terraform/09-costs.md / 16-implementation-phases.md。
+
+name: cloudkitty
+
+x-kolla-image: &ck_image_api quay.io/openstack.kolla/cloudkitty-api:${KOLLA_TAG:-2026.1-rocky-10}
+x-kolla-image-proc: &ck_image_proc quay.io/openstack.kolla/cloudkitty-processor:${KOLLA_TAG:-2026.1-rocky-10}
+
+services:
+  mariadb:
+    image: docker.io/library/mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: cloudkitty
+      MARIADB_USER: cloudkitty
+      MARIADB_PASSWORD: ${CK_DB_PASSWORD}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  influxdb:
+    image: docker.io/library/influxdb:1.8
+    restart: unless-stopped
+    environment:
+      INFLUXDB_DB: cloudkitty
+      INFLUXDB_HTTP_AUTH_ENABLED: "false"
+      INFLUXDB_REPORTING_DISABLED: "true"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8086/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  openstack-exporter:
+    # 2.0.0-alpha は cinder(limits_volume_used_gb) / neutron floating_ip を出す。
+    # 1.7.0(最新stable)・1.8.0-alpha は cinder 無し・flavor_id が <nil> なので不可。
+    # digest: sha256:2a864f41db28a1656a5034e8a17831fb37986e8856fd3f5361586a05f928950a
+    image: ghcr.io/openstack-exporter/openstack-exporter:${OS_EXPORTER_TAG:-2.0.0-alpha}
+    restart: unless-stopped
+    command:
+      - --os-client-config=/etc/openstack/clouds.yaml
+      - --endpoint-type=public
+      - --collect-metric-time
+      - polaris
+    volumes:
+      - ./openstack/clouds.yaml:/etc/openstack/clouds.yaml:ro
+    expose:
+      - "9180"
+
+  prometheus:
+    image: docker.io/prom/prometheus:${PROMETHEUS_TAG:-v3.1.0}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=45d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    # ホストの :9090 は cockpit.socket が使用中。デバッグは
+    # `docker compose exec prometheus wget -qO- localhost:9090/...` で行う。
+    expose:
+      - "9090"
+    depends_on:
+      - openstack-exporter
+
+  ck-dbsync:
+    image: *ck_image_api
+    entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-dbsync"]
+    command: ["upgrade"]
+    user: "0"
+    volumes:
+      - ./cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: "no"
+
+  # cloudkitty.conf は deploy.sh が .env から cloudkitty.conf.tpl をレンダリングする。
+
+  ck-storage-init:
+    image: *ck_image_api
+    entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-storage-init"]
+    user: "0"
+    volumes:
+      - ./cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      ck-dbsync:
+        condition: service_completed_successfully
+    restart: "no"
+
+  cloudkitty-api:
+    image: *ck_image_api
+    entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-api"]
+    command: ["--host", "0.0.0.0", "--port", "8889"]
+    user: "0"
+    restart: unless-stopped
+    volumes:
+      - ./cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+      - ./cloudkitty/metrics.yml:/etc/cloudkitty/metrics.yml:ro
+      - ./cloudkitty/policy.yaml:/etc/cloudkitty/policy.yaml:ro
+    ports:
+      - "8889:8889"
+    depends_on:
+      ck-dbsync:
+        condition: service_completed_successfully
+      ck-storage-init:
+        condition: service_completed_successfully
+
+  cloudkitty-processor:
+    image: *ck_image_proc
+    entrypoint: ["/var/lib/kolla/venv/bin/cloudkitty-processor"]
+    user: "0"
+    restart: unless-stopped
+    volumes:
+      - ./cloudkitty/cloudkitty.conf:/etc/cloudkitty/cloudkitty.conf:ro
+      - ./cloudkitty/metrics.yml:/etc/cloudkitty/metrics.yml:ro
+      - ./cloudkitty/policy.yaml:/etc/cloudkitty/policy.yaml:ro
+    depends_on:
+      cloudkitty-api:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+volumes:
+  mariadb-data:
+  influxdb-data:
+  prometheus-data:

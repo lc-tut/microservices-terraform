@@ -1,0 +1,36 @@
+# CloudKitty prometheus collector 向けの正規化レイヤー。
+#
+# CloudKitty の collector は `<metric>{project_id="<id>"}[<period>s]` という
+# 固定形のクエリしか組み立てられない（label_replace 等を差し込めない。
+# cloudkitty/collector/prometheus.py の build_query 参照）。そのため
+#   * openstack-exporter が付ける `tenant_id` ラベルを `project_id` に寄せ
+#   * 1 プロジェクト 1 系列に集約
+# したものを recording rule で用意し、CloudKitty からはこれを引く。
+#
+# 単価は documents/terraform/09-costs.md（1 Credit = 1 vCPU-hour 基準）:
+#   vCPU 1.000 / RAM 0.250(GB-h) / Block 0.002(GB-h) / Floating IP 0.500(IP-h)
+
+groups:
+  - name: cloudkitty-normalize
+    interval: 60s
+    rules:
+      - record: cloudkitty:vcpu:used
+        expr: >-
+          max by (project_id) (
+            label_replace(openstack_nova_limits_vcpus_used, "project_id", "$1", "tenant_id", "(.+)")
+          )
+
+      - record: cloudkitty:memory_gb:used
+        expr: >-
+          max by (project_id) (
+            label_replace(openstack_nova_limits_memory_used, "project_id", "$1", "tenant_id", "(.+)")
+          ) / 1024
+
+      - record: cloudkitty:volume_gb:used
+        expr: >-
+          max by (project_id) (
+            label_replace(openstack_cinder_limits_volume_used_gb, "project_id", "$1", "tenant_id", "(.+)")
+          )
+
+      - record: cloudkitty:floating_ip:count
+        expr: count by (project_id) (openstack_neutron_floating_ip)

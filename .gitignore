@@ -49,10 +49,22 @@ terraform.rc
 # ローカル開発用 provider override（本番では使わない）
 terraform/local-override.tf
 
+# idp-infra が生成する Authentik VM の SSH 秘密鍵
+terraform/platform/idp-infra/.ssh/
+
 # ローカル開発環境の秘密情報
 local/authentik/.env
 local/.env
 local/clouds.yaml
+# Polaris 実機のアクセス情報・秘密鍵（コントロールノード SSH / admin パスワード等）
+local/polaris-access.md
+local/polaris/
+
+# CloudKitty 基盤スタックのレンダリング済み設定・認証情報
+terraform/platform/cloudkitty-infra/stack/.env
+terraform/platform/cloudkitty-infra/stack/openstack/clouds.yaml
+terraform/platform/cloudkitty-infra/stack/cloudkitty/cloudkitty.conf
+terraform/platform/cloudkitty-infra/.ssh/
 local/gcp-devstack/windows-autostop/config.env
 local/gcp-devstack/windows-autostop/*.vbs
 local/.secrets

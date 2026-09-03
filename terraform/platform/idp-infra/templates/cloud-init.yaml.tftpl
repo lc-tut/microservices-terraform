@@ -1,0 +1,148 @@
+#cloud-config
+# terraform/platform/idp-infra が生成。手で編集しても apply で上書きされる。
+# local/authentik/docker-compose.yml（server + worker + postgresql、Redis なし、
+# ローカルで8日以上 healthy 稼働の実績構成）を忠実に移植したもの。
+# 差分は「restart: unless-stopped を付与（VM 再起動で自動復帰させるため）」のみ。
+
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - 1.1.1.1
+    - 8.8.8.8
+
+write_files:
+  - path: /opt/authentik/docker-compose.yml
+    permissions: "0644"
+    content: |
+      services:
+        postgresql:
+          image: ${postgres_image}
+          restart: unless-stopped
+          environment:
+            POSTGRES_PASSWORD: "${pg_pass}"
+            POSTGRES_USER: authentik
+            POSTGRES_DB: authentik
+          volumes:
+            - pg_data:/var/lib/postgresql/data
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+        server:
+          image: ${authentik_image}
+          restart: unless-stopped
+          command: server
+          environment:
+            AUTHENTIK_REDIS__HOST: ""
+            AUTHENTIK_POSTGRESQL__HOST: postgresql
+            AUTHENTIK_POSTGRESQL__USER: authentik
+            AUTHENTIK_POSTGRESQL__NAME: authentik
+            AUTHENTIK_POSTGRESQL__PASSWORD: "${pg_pass}"
+            AUTHENTIK_SECRET_KEY: "${secret_key}"
+            AUTHENTIK_BOOTSTRAP_PASSWORD: "${bootstrap_password}"
+            AUTHENTIK_BOOTSTRAP_TOKEN: "${bootstrap_token}"
+            AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+            AUTHENTIK_EMAIL__HOST: "${email_host}"
+            AUTHENTIK_EMAIL__PORT: "${email_port}"
+            AUTHENTIK_EMAIL__USERNAME: "${email_username}"
+            AUTHENTIK_EMAIL__PASSWORD: "${email_password}"
+            AUTHENTIK_EMAIL__USE_TLS: "${email_use_tls}"
+            AUTHENTIK_EMAIL__USE_SSL: "${email_use_ssl}"
+            AUTHENTIK_EMAIL__FROM: "${email_from}"
+          ports:
+            - "9000:9000"
+            - "9443:9443"
+          depends_on:
+            postgresql:
+              condition: service_healthy
+
+        worker:
+          image: ${authentik_image}
+          restart: unless-stopped
+          command: worker
+          environment:
+            AUTHENTIK_REDIS__HOST: ""
+            AUTHENTIK_POSTGRESQL__HOST: postgresql
+            AUTHENTIK_POSTGRESQL__USER: authentik
+            AUTHENTIK_POSTGRESQL__NAME: authentik
+            AUTHENTIK_POSTGRESQL__PASSWORD: "${pg_pass}"
+            AUTHENTIK_SECRET_KEY: "${secret_key}"
+            AUTHENTIK_BOOTSTRAP_PASSWORD: "${bootstrap_password}"
+            AUTHENTIK_BOOTSTRAP_TOKEN: "${bootstrap_token}"
+            AUTHENTIK_EMAIL__HOST: "${email_host}"
+            AUTHENTIK_EMAIL__PORT: "${email_port}"
+            AUTHENTIK_EMAIL__USERNAME: "${email_username}"
+            AUTHENTIK_EMAIL__PASSWORD: "${email_password}"
+            AUTHENTIK_EMAIL__USE_TLS: "${email_use_tls}"
+            AUTHENTIK_EMAIL__USE_SSL: "${email_use_ssl}"
+            AUTHENTIK_EMAIL__FROM: "${email_from}"
+          depends_on:
+            postgresql:
+              condition: service_healthy
+
+      volumes:
+        pg_data:
+
+  - path: /etc/systemd/system/authentik.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Authentik (docker compose)
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/authentik
+      ExecStart=/usr/bin/docker compose up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose down
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # Docker CE は 2026 時点で Rocky/EL10 向け RPM を未提供
+  # （download.docker.com/linux/rocky/ の el10 repo は空）。
+  # EL9 の Docker CE パッケージは EL10 でそのまま動くため、releasever を 9 に
+  # 固定した repo を使う。EL10 向けが出たら baseurl を el10 に戻すこと。
+  - path: /etc/yum.repos.d/docker-ce.repo
+    permissions: "0644"
+    content: |
+      [docker-ce-stable]
+      name=Docker CE Stable - EL9 (pinned; EL10 packages not yet published)
+      baseurl=https://download.docker.com/linux/centos/9/x86_64/stable
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://download.docker.com/linux/centos/gpg
+
+  # EL10 の Rocky GenericCloud は kernel-modules-extra 未導入で xt_addrtype が無く、
+  # Docker(EL9 build) の既定 iptables バックエンドが PREROUTING ルール追加に失敗する。
+  # Docker 29 のネイティブ nftables バックエンドを使えば xt_addrtype 不要で回避できる。
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "firewall-backend": "nftables"
+      }
+
+  # GenericCloud 既定では ip_forward=0 のため Docker の bridge network 初期化が失敗する。
+  - path: /etc/sysctl.d/99-docker-forward.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+runcmd:
+  # SG(neutron) が唯一の network 制御。ホスト側 firewalld は無効化する。
+  - [bash, -c, "systemctl disable --now firewalld 2>/dev/null || true"]
+  - [bash, -c, "sysctl -p /etc/sysctl.d/99-docker-forward.conf"]
+  # Docker のインストール（上の EL9 pinned repo を使用。失敗時リトライ）
+  - [bash, -c, "dnf -y install dnf-plugins-core || true"]
+  - [bash, -c, "for i in 1 2 3 4 5; do dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin && break; echo 'docker install retry'; sleep 20; done"]
+  - [systemctl, enable, "--now", docker]
+  - [bash, -c, "cd /opt/authentik && for i in 1 2 3; do docker compose pull && break; sleep 20; done"]
+  - [systemctl, enable, "--now", authentik.service]
+  - [bash, -c, "echo \"idp-infra bootstrap finished at $(date -Is)\" > /opt/authentik/.bootstrapped"]

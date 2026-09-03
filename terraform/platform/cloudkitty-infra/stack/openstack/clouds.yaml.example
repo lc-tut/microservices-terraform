@@ -1,0 +1,15 @@
+# cp clouds.yaml.example clouds.yaml して password を入れる（clouds.yaml は gitignore 済み）。
+# openstack-exporter が Polaris の全プロジェクトの使用量を読むための認証情報。
+# admin ロールがあれば admin プロジェクトスコープで全テナントの limits を取得できる。
+clouds:
+  polaris:
+    auth:
+      auth_url: http://192.168.1.210:5000/v3
+      username: admin
+      password: __OS_ADMIN_PASSWORD__
+      project_name: admin
+      project_domain_name: Default
+      user_domain_name: Default
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3

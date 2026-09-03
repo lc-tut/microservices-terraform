@@ -1,0 +1,43 @@
+# CloudKitty collector（prometheus）のメトリクス定義。
+# キー = Prometheus 側の系列名（stack/prometheus/rules.yml の recording rule）。
+# alt_name = CloudKitty 内部のサービス名。terraform/platform/cloudkitty/ の
+#            Hashmap ルール（modules/cloudkitty-service の service_name）と一致させる。
+#
+# CloudKitty は `<key>{project_id="<id>"}[<period>s]` を
+# `max(max_over_time(...)) by (<groupby>)` で評価する（aggregation_method=max）。
+# recording rule 側で 1 プロジェクト 1 系列に集約済みなので、これは
+# 「その period 中のピーク値」を qty として返す。period=3600 なので
+# qty=vCPU 数 → 1 Credit/vCPU-hour がそのまま成立する。
+
+metrics:
+  cloudkitty:vcpu:used:
+    alt_name: vcpu
+    unit: vcpu
+    groupby:
+      - project_id
+    extra_args:
+      aggregation_method: max
+
+  cloudkitty:memory_gb:used:
+    alt_name: memory
+    unit: GiB
+    groupby:
+      - project_id
+    extra_args:
+      aggregation_method: max
+
+  cloudkitty:volume_gb:used:
+    alt_name: volume
+    unit: GiB
+    groupby:
+      - project_id
+    extra_args:
+      aggregation_method: max
+
+  cloudkitty:floating_ip:count:
+    alt_name: floating_ip
+    unit: ip
+    groupby:
+      - project_id
+    extra_args:
+      aggregation_method: max
