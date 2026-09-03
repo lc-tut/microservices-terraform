@@ -74,6 +74,16 @@ disable_service c-api
 disable_service c-vol
 disable_service c-sch
 disable_service c-bak
+
+# CloudKitty（課金・クォータ関連の Hashmap ルールを Terraform (restapi provider)
+# から管理するため導入。documents/terraform/16-implementation-phases.md 参照）。
+# stable/2026.1 の devstack/settings 既定値通り fetcher/collector=gnocchi・
+# storage=influxdb の標準構成。Gnocchi は OpenStack 本体からは独立したプロジェクトの
+# ため github.com/gnocchixyz を参照する
+enable_plugin ceilometer https://opendev.org/openstack/ceilometer stable/2026.1
+enable_plugin gnocchi https://github.com/gnocchixyz/gnocchi master
+enable_plugin cloudkitty https://opendev.org/openstack/cloudkitty stable/2026.1
+enable_service ck-api,ck-proc
 LOCALCONF
 
   cd devstack
