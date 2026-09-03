@@ -232,13 +232,13 @@ git push && gh pr create ...
 # 承認 → merge → apply
 ```
 
-### 3-2. `terraform/platform/images/` の apply
+### 3-2. `terraform/platform/openstack/images/` の apply
 
 SSH CA 組み込み済みの Ubuntu 24.04 ベースイメージを登録します。
 
 ```bash
 git checkout -b feat/platform-images
-git add terraform/platform/images/
+git add terraform/platform/openstack/images/
 git commit -m "feat(images): base VM image with SSH CA"
 git push && gh pr create ...
 ```

@@ -10,7 +10,7 @@
 Phase 0  ローカル開発環境          ✅
 Phase 1  GitHub / CI 基盤
 Phase 2  Authentik（IdP）
-Phase 3  OpenStack platform
+Phase 3  OpenStack platform          ✅
 Phase 4  catalog（billing / teams / projects）
 Phase 5  workspace モジュール
 Phase 6  Middleware API
@@ -146,7 +146,7 @@ Phase 0
 
 ---
 
-## Phase 3 — OpenStack platform
+## Phase 3 — OpenStack platform ✅
 
 **目標**: 全プロジェクトが共有する OpenStack のネットワーク基盤・クォータ定義を整える。
 
@@ -171,8 +171,16 @@ Phase 0
      shared 属性ではなく RBAC ポリシーで全プロジェクト共有されていたため、
      そのポリシーを import して管理下に置いた
 
-1. `terraform/platform/images/` の実装 — 未着手
-   - SSH CA 組み込み済みの Ubuntu 24.04 ベースイメージ管理
+1. `terraform/platform/openstack/images/` の実装 ✅ 実装・本番適用・実機検証済み
+   - Ubuntu 24.04 公式 cloud image を Glance に登録（`web_download` で URL から
+     直接インポート）。この repo にはまだ Packer 等のイメージビルドパイプラインが
+     無いため、「SSH CA 組み込み済み」は厳密にはイメージファイルへの焼き込み
+     ではなく、CA 鍵ペア（`ssh_ca.tf`）を生成して公開鍵をイメージの
+     properties と Terraform output の両方に持たせる形にとどめている。
+     実際に VM 起動時 sshd へ `TrustedUserCAKeys` を設定するのは
+     Phase 5 `modules/lc-vm` 側の cloud-init の責務（未実装）
+   - CA 秘密鍵は state にのみ保持し、証明書発行用の CLI（Phase 6
+     Middleware API）以外には渡さない設計
 
 1. `terraform/platform/openstack/quotas/` の実装 ✅ 実装・本番適用・実機検証済み
    （Nova・Cinder 双方の quota-class-set API）。Cinder API の URL に project_id
@@ -181,8 +189,8 @@ Phase 0
    - クォータティア定義（small / medium / large）
    - `07-quota.md` の設計に従い実装
 
-**成果物**: `catalog/projects/` が subnetpool から /24 を払い出せる状態
-（`platform/images/` のみ残っており未達）。
+**成果物**: `catalog/projects/` が subnetpool から /24 を払い出せる状態。
+Phase 3 の3項目（network・images・quotas）は全て実装・実機適用済み。
 
 ---
 

@@ -45,10 +45,11 @@ microservices-terraform/
 │   │   │   │   └── external_network.tf  # 外部ネットワーク（data 参照のみ）
 │   │   │   ├── quotas/                  # グローバルデフォルトクォータ（quota-class-set）
 │   │   │   │   └── main.tf
-│   │   │   └── cloudkitty/              # CloudKitty Hashmap 課金ルール（Credit 単価）
-│   │   │       └── main.tf
-│   │   ├── images/                    # ベース VM イメージ管理（未着手）
-│   │   │   └── main.tf                # SSH CA 組み込み済みイメージ
+│   │   │   ├── cloudkitty/              # CloudKitty Hashmap 課金ルール（Credit 単価）
+│   │   │   │   └── main.tf
+│   │   │   └── images/                  # ベース VM イメージ管理
+│   │   │       ├── ubuntu_image.tf      # Ubuntu 24.04 ベースイメージ（Glance 登録）
+│   │   │       └── ssh_ca.tf            # SSH CA 鍵ペア生成
 │   │   ├── infra/                     # platform ソフトウェアをホストする VM のプロビジョニング
 │   │   │   ├── idp-infra/               # Authentik インスタンス本体（VM + Docker Compose）
 │   │   │   ├── cloudkitty-infra/        # CloudKitty 本体（VM + Docker Compose）

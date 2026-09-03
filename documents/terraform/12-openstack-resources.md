@@ -92,9 +92,9 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 
 | リソース | 分類 | 管理フォルダ | 備考 |
 | --- | --- | --- | --- |
-| `openstack_images_image_v2` (ベースイメージ) | 🔴 Tier 1 | `platform/images/` | SSH CA 組み込み済み |
+| `openstack_images_image_v2` (ベースイメージ) | 🔴 Tier 1 | `platform/openstack/images/` | SSH CA 組み込み済み |
 | `openstack_images_image_v2` (カスタムイメージ) | 🟢 Tier 3 | `workspaces/` | Harbor / Packer 推奨 |
-| `openstack_images_image_access_v2` | 🔴 Tier 1 | `platform/images/` | プロジェクト間でのイメージ共有 |
+| `openstack_images_image_access_v2` | 🔴 Tier 1 | `platform/openstack/images/` | プロジェクト間でのイメージ共有 |
 | `openstack_images_image_access_accept_v2` | 🟢 Tier 3 | `workspaces/` | 共有イメージの受け取り |
 
 ---
@@ -354,7 +354,7 @@ Workspace 向けに提供する便利モジュール一覧。
 | フォルダ | 管理リソース |
 | --- | --- |
 | `platform/openstack/network/` | subnetpool・外部 network・VPC Gateway router・RBAC policy |
-| `platform/images/` | base image・image access |
+| `platform/openstack/images/` | base image・image access |
 | `platform/openstack/quotas/` | compute / storage / network / LB quota |
 | `platform/idp/` | project・user・group・role・role assignment（SCIM 経由も含む） |
 | `catalog/projects/<name>/` | project network・subnet（/24）・router interface・application credential（Access Rules 付き）・dns zone |
