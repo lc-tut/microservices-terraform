@@ -48,7 +48,7 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 | `openstack_compute_interface_attach_v2` | ⛔ BLOCKED | — | VPC Gateway 強制のため禁止 |
 | `openstack_compute_flavor_v2` | 🔴 Tier 1 | `platform/` | lc-micro / lc-small 等を platform が定義 |
 | `openstack_compute_aggregate_v2` | 🔴 Tier 1 | `platform/` | ホストアグリゲート |
-| `openstack_compute_quotaset_v2` | 🔴 Tier 1 | `platform/quotas/` | プロジェクトごとのクォータ |
+| `openstack_compute_quotaset_v2` | 🔴 Tier 1 | `platform/openstack/quotas/` | プロジェクトごとのクォータ |
 
 ---
 
@@ -60,7 +60,7 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 | `openstack_blockstorage_snapshot_v3` | 🟢 Tier 3 | `workspaces/` | |
 | `openstack_blockstorage_volume_attach_v3` | 🟢 Tier 3 | `workspaces/` | |
 | `openstack_blockstorage_volume_type_v3` | 🔴 Tier 1 | `platform/` | SSD / HDD 等の volume type 定義 |
-| `openstack_blockstorage_quotaset_v3` | 🔴 Tier 1 | `platform/quotas/` | |
+| `openstack_blockstorage_quotaset_v3` | 🔴 Tier 1 | `platform/openstack/quotas/` | |
 
 ---
 
@@ -68,23 +68,23 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 
 | リソース | 分類 | 管理フォルダ | 備考 |
 | --- | --- | --- | --- |
-| `openstack_networking_network_v2` (共有・外部) | 🔴 Tier 1 | `platform/network/` | platform backbone |
+| `openstack_networking_network_v2` (共有・外部) | 🔴 Tier 1 | `platform/openstack/network/` | platform backbone |
 | `openstack_networking_network_v2` (プロジェクト専用) | 🟡 Tier 2 | `catalog/projects/` | private network |
 | `openstack_networking_subnet_v2` | 🟡 Tier 2 | `catalog/projects/` | subnetpool から /24 を払い出し |
-| `openstack_networking_subnetpool_v2` | 🔴 Tier 1 | `platform/network/` | IP 帯域のマスタープール |
-| `openstack_networking_router_v2` | 🔴 Tier 1 | `platform/network/` | VPC Gateway ルーター |
+| `openstack_networking_subnetpool_v2` | 🔴 Tier 1 | `platform/openstack/network/` | IP 帯域のマスタープール |
+| `openstack_networking_router_v2` | 🔴 Tier 1 | `platform/openstack/network/` | VPC Gateway ルーター |
 | `openstack_networking_router_interface_v2` | 🟡 Tier 2 | `catalog/projects/` | VPC Gateway へ project subnet を接続 |
-| `openstack_networking_router_route_v2` | 🔴 Tier 1 | `platform/network/` | 静的ルート管理 |
+| `openstack_networking_router_route_v2` | 🔴 Tier 1 | `platform/openstack/network/` | 静的ルート管理 |
 | `openstack_networking_floatingip_v2` | 🟢 Tier 3 | `workspaces/` | デフォルトクォータ 0。billing-accounts 申請後に利用可能。課金あり |
 | `openstack_networking_floatingip_associate_v2` | 🟢 Tier 3 | `workspaces/` | 同上 |
 | `openstack_networking_port_v2` | ⛔ BLOCKED | — | 明示的なポート作成禁止。インスタンス生成時の暗黙ポートは Nova API 経由のため影響なし |
 | `openstack_networking_secgroup_v2` | 🟢 Tier 3 | `workspaces/` | プロジェクトスコープ内 |
 | `openstack_networking_secgroup_rule_v2` | 🟢 Tier 3 | `workspaces/` | |
-| `openstack_networking_rbac_policy_v2` | 🔴 Tier 1 | `platform/network/` | ネットワーク共有ポリシー |
+| `openstack_networking_rbac_policy_v2` | 🔴 Tier 1 | `platform/openstack/network/` | ネットワーク共有ポリシー |
 | `openstack_networking_trunk_v2` | ⛔ BLOCKED | — | platform が管理 |
 | `openstack_networking_qos_policy_v2` | 🔴 Tier 1 | `platform/` | QoS ポリシー定義 |
 | `openstack_networking_qos_bandwidth_limit_rule_v2` | 🔴 Tier 1 | `platform/` | |
-| `openstack_networking_quota_v2` | 🔴 Tier 1 | `platform/quotas/` | |
+| `openstack_networking_quota_v2` | 🔴 Tier 1 | `platform/openstack/quotas/` | |
 
 ---
 
@@ -128,7 +128,7 @@ LB 本体・Listener・Pool の新規作成は禁止。
 | `openstack_lb_monitor_v2` | ⛔ BLOCKED | |
 | `openstack_lb_l7policy_v2` | ⛔ BLOCKED | |
 | `openstack_lb_l7rule_v2` | ⛔ BLOCKED | |
-| `openstack_lb_quota_v2` | 🔴 Tier 1 | `platform/quotas/` |
+| `openstack_lb_quota_v2` | 🔴 Tier 1 | `platform/openstack/quotas/` |
 
 ---
 
@@ -353,9 +353,9 @@ Workspace 向けに提供する便利モジュール一覧。
 
 | フォルダ | 管理リソース |
 | --- | --- |
-| `platform/network/` | subnetpool・外部 network・VPC Gateway router・RBAC policy |
+| `platform/openstack/network/` | subnetpool・外部 network・VPC Gateway router・RBAC policy |
 | `platform/images/` | base image・image access |
-| `platform/quotas/` | compute / storage / network / LB quota |
+| `platform/openstack/quotas/` | compute / storage / network / LB quota |
 | `platform/idp/` | project・user・group・role・role assignment（SCIM 経由も含む） |
 | `catalog/projects/<name>/` | project network・subnet（/24）・router interface・application credential（Access Rules 付き）・dns zone |
 | `workspaces/<name>/` | インスタンス・ボリューム・SG・オブジェクトストレージ・DNS recordset・シークレット・DB・Kubernetes リソース |

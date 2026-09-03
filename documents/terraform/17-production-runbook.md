@@ -135,22 +135,19 @@ gh pr close --delete-branch <PR番号>
 
 ### 2-1. Authentik 本番インスタンスのデプロイ
 
-#### 現状（最小構成 / 実機検証済み） — `terraform/platform/idp-infra/`
+#### 現状（最小構成 / 実機検証済み） — `terraform/platform/infra/idp-infra/`
 
-Polaris（実機 OpenStack、Kolla-Ansible）には **Magnum / Octavia が無く**、
-マネージド Kubernetes 基盤が存在しない。そのため現状の最小構成は
-**単一 VM + Docker Compose** で、`terraform/platform/idp-infra/` が IaC 管理する。
+マネージド Kubernetes 基盤が存在しない環境向けに、**単一 VM + Docker Compose** の
+最小構成を `terraform/platform/infra/idp-infra/` で IaC 管理している。
+VM スペック・ネットワーク・Security Group・cloud-init の内容・既知の問題
+（Docker のインストール周り等）は同ディレクトリの `README.md` を参照。
 
-- `rocky-10` / `m1.medium`(4GB/2vCPU) / boot-from-volume 40GB / `lc-dev-net`
-- Floating IP を `ext-net` から採番、Security Group で 22 / 9000 / 9443 / ICMP を許可
-- cloud-init が Docker を入れ、`local/authentik/docker-compose.yml` を忠実移植した
-  構成（**server + worker + postgresql、Redis なし**）を起動する
-- `AUTHENTIK_SECRET_KEY` / postgres パスワード / akadmin パスワード / API トークンは
-  `random_*` で新規生成し tfstate（MinIO/Ceph S3）にのみ保存
+`AUTHENTIK_SECRET_KEY` / postgres パスワード / akadmin パスワード / API トークンは
+`random_*` で新規生成し tfstate にのみ保存する。
 
 ```bash
-export OS_CLIENT_CONFIG_FILE=/path/to/local/clouds.yaml   # lc-dev scope の cloud
-cd terraform/platform/idp-infra
+export OS_CLIENT_CONFIG_FILE=/path/to/local/clouds.yaml
+cd terraform/platform/infra/idp-infra
 terraform init && terraform apply
 
 terraform output -raw authentik_url               # → 2-3 の TF_VAR_authentik_url
@@ -159,12 +156,8 @@ terraform output -raw authentik_akadmin_password  # akadmin Web ログイン用
 ```
 
 > **食い違い注記**: `## 前提条件` の「LC-Cloud 上に K8s クラスターが存在すること」は
-> Polaris 実機ではまだ満たされていない。下記 Helm 手順は将来 K8s 基盤ができた
+> 現状の環境ではまだ満たされていない。下記 Helm 手順は将来 K8s 基盤ができた
 > 時点の本番像であり、**未検証**。当面は上記 VM 構成で Phase 2 以降を進める。
->
-> Rocky/EL10 は 2026 時点で Docker CE の EL10 向け RPM が未提供のため、cloud-init は
-> EL9 pinned repo + Docker の nftables firewall backend + `net.ipv4.ip_forward=1` で
-> 回避している（`terraform/platform/idp-infra/templates/cloud-init.yaml.tftpl` 参照）。
 
 #### 将来（K8s 基盤ができたら） — Helm
 
@@ -190,7 +183,7 @@ helm upgrade --install authentik authentik/authentik \
 
 ```bash
 gh secret set AUTHENTIK_TOKEN \
-  --body "$(cd terraform/platform/idp-infra && terraform output -raw authentik_token)"
+  --body "$(cd terraform/platform/infra/idp-infra && terraform output -raw authentik_token)"
 ```
 
 **Helm 構成（将来）**: 初期セットアップウィザードを完了し、
@@ -226,14 +219,14 @@ curl -H "Authorization: Bearer <AUTHENTIK_TOKEN>" \
 
 ## Phase 3 — OpenStack platform
 
-### 3-1. `terraform/platform/network/` の apply
+### 3-1. `terraform/platform/openstack/network/` の apply
 
 VPC Gateway・subnetpool・外部ネットワークを作成します。
 
 ```bash
 git checkout -b feat/platform-network
-# terraform/platform/network/ を実装
-git add terraform/platform/network/
+# terraform/platform/openstack/network/ を実装
+git add terraform/platform/openstack/network/
 git commit -m "feat(network): VPC gateway and subnetpool"
 git push && gh pr create ...
 # 承認 → merge → apply
@@ -250,13 +243,13 @@ git commit -m "feat(images): base VM image with SSH CA"
 git push && gh pr create ...
 ```
 
-### 3-3. `terraform/platform/quotas/` の apply
+### 3-3. `terraform/platform/openstack/quotas/` の apply
 
 クォータティア（small / medium / large）を定義します。
 
 ```bash
 git checkout -b feat/platform-quotas
-git add terraform/platform/quotas/
+git add terraform/platform/openstack/quotas/
 git commit -m "feat(quotas): quota tier definitions"
 git push && gh pr create ...
 ```
@@ -387,7 +380,7 @@ VM を作り直すには `terraform apply -replace=openstack_compute_instance_v2
 ### Authentik から Keystone に認証できない
 
 Keystone の federation mapping が未設定の可能性があります。
-OpenStack 管理者（Polaris チーム）に以下の設定を依頼します:
+OpenStack 管理者に以下の設定を依頼します:
 
 ```bash
 # Keystone 側での設定（OpenStack 管理者が実行）

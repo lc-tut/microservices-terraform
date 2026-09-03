@@ -157,19 +157,32 @@ Phase 0
 
 **作業内容**:
 
-1. `terraform/platform/network/` の実装
-   - `gateway.tf` — VPC Gateway ルーター
-   - `subnetpool.tf` — IP 帯域マスタープール（例: `10.0.0.0/8`）
-   - `external_network.tf` — 外部ネットワーク・RBAC
+1. `terraform/platform/openstack/network/` の実装 ✅ 実装・本番適用・実機検証済み。
+   実機確認の結果、想定と異なり VPC Gateway に相当する router
+   （`lc-dev-router`）と、外部ネットワークの共有を実現する RBAC ポリシー
+   （`access_as_external`）が共に既に存在していたため、新規作成ではなく
+   `terraform import` で両方を管理下に置いた（実インフラへの変更なし）。
+   `subnetpool`（新規追加分）のみ実際に apply 済み。`terraform plan` clean 確認済み
+   - `gateway.tf` — VPC Gateway ルーター（既存 `lc-dev-router` を import）
+   - `subnetpool.tf` — IP 帯域マスタープール（`10.0.0.0/8`、/24 固定払い出し、
+     `shared = true`）。既存の手動作成サブネット（`10.10.0.0/24`、この pool 外）
+     との衝突可能性は極めて低いことを確認済み（コメント参照）
+   - `external_network.tf` — 外部ネットワークは data 参照のみ。ただし
+     shared 属性ではなく RBAC ポリシーで全プロジェクト共有されていたため、
+     そのポリシーを import して管理下に置いた
 
-1. `terraform/platform/images/` の実装
+1. `terraform/platform/images/` の実装 — 未着手
    - SSH CA 組み込み済みの Ubuntu 24.04 ベースイメージ管理
 
-1. `terraform/platform/quotas/` の実装
+1. `terraform/platform/openstack/quotas/` の実装 ✅ 実装・本番適用・実機検証済み
+   （Nova・Cinder 双方の quota-class-set API）。Cinder API の URL に project_id
+   を含めると 400 になる実機特有の罠を発見・修正。詳細は
+   `terraform/platform/openstack/quotas/README.md` 参照
    - クォータティア定義（small / medium / large）
    - `07-quota.md` の設計に従い実装
 
-**成果物**: `catalog/projects/` が subnetpool から /24 を払い出せる状態。
+**成果物**: `catalog/projects/` が subnetpool から /24 を払い出せる状態
+（`platform/images/` のみ残っており未達）。
 
 ---
 
@@ -371,26 +384,22 @@ terraform apply
 
 ### ✅ 追加解決済み
 
-**[P5] CloudKitty の導入方針 → restapi プロバイダーで IaC 管理 ✅ 実装・実機検証済み（DevStack + Polaris 実機）**
+**[P5] CloudKitty の導入方針 → restapi プロバイダーで IaC 管理 ✅ 実装・実機検証済み**
 
 CloudKitty を OpenStack に追加し、Hashmap ルールを `Mastercard/terraform-provider-restapi` で
-管理する方針で実装。ローカル DevStack と **Polaris（実 OpenStack / Kolla-Ansible）** の両方で
-`terraform apply` 成功・`terraform plan` clean・CloudKitty API での実データ確認まで完了済み
-（`terraform/platform/cloudkitty/`・`terraform/modules/cloudkitty-service/`）。
-Polaris への基盤展開は `terraform/platform/cloudkitty-infra/`（lc-dev プロジェクトの
-VM 1 台に docker compose で CloudKitty 一式）。
+管理する方針で実装。複数の実 OpenStack 環境で `terraform apply` 成功・`terraform plan`
+clean・CloudKitty API での実データ確認まで完了済み（`terraform/platform/openstack/cloudkitty/`・
+`terraform/modules/cloudkitty-service/`）。CloudKitty 本体（VM・コンテナ）のプロビジョニングは
+`terraform/platform/infra/cloudkitty-infra/`。
 
 - **API**: Hashmap エンドポイントは CRUD が REST で完結しており、IaC 管理に適している
 - **プロバイダー**: `restapi_object` + `id_attribute`（`service_id`/`field_id`/`mapping_id`）で対応
 - **UPDATE 問題（訂正）**: 当初「PUT が 302 を返す」と想定していたが、実機検証の結果
   **PUT は 405 Method Not Allowed**（services/fields/mappings いずれも更新不可）だった。
   `force_new` で destroy → create にする対処自体は同じ
-- **その他、実機検証で判明した罠**: API パスは provider の `uri`（= サービスカタログの
-  rating エンドポイント URL）に対してさらに `/v1/rating/module_config/hashmap/...` を
-  足す（DevStack は URL が `.../rating` で終わる、Polaris はスタンドアロン
-  `http://<FIP>:8889` を直接登録。どちらもモジュールの path 定義でそのまま組み立つ）／
-  JSON フィールド名は `map_type` ではなく `type`／`ignore_server_additions = true` が必須
-  （無いとサーバー付加フィールドが永久に drift 扱いされる）
+- **その他、実機検証で判明した罠**（API パスの組み立て方・JSON フィールド名の実際・
+  `ignore_server_additions` が必須な理由）は `terraform/modules/cloudkitty-service/main.tf`
+  のコメントにまとめてある
 - **モジュール化**: `modules/cloudkitty-service` として `service → field → mappings` を抽象化。
   2 モード:
   - **field モード**（`field_name != null`）: field の値ごとの mapping（`mappings`）。
@@ -401,10 +410,10 @@ VM 1 台に docker compose で CloudKitty 一式）。
     field で値をマッチングする必要がない）。
 
 ```hcl
-# Polaris 実機での実装（terraform/platform/cloudkitty/main.tf）。
-# service 名は collector(metrics.yml) の alt_name と一致させる。
+# terraform/platform/openstack/cloudkitty/main.tf
+# service 名は collector 側のメトリクス名と一致させる。
 module "vcpu" {
-  source       = "../../modules/cloudkitty-service"
+  source       = "../../../modules/cloudkitty-service"
   service_name = "vcpu"
   service_rate = { cost = "1.000000", type = "flat" } # 1 Credit / vCPU-hour
   providers    = { restapi.cloudkitty = restapi.cloudkitty }
@@ -412,27 +421,17 @@ module "vcpu" {
 # 同様に memory=0.25 / volume=0.002 / floating_ip=0.5
 ```
 
-**OpenStack 側の collector（Polaris 実機で判明・重要な方針変更）**: 当初は DevStack と
-同じ **Gnocchi collector（Ceilometer + Gnocchi）** を想定していたが、Polaris（Kolla-Ansible）は
-`enable_ceilometer = no` で **nova / neutron の `[oslo_messaging_notifications] driver = noop`**。
-通知バスが無いため Ceilometer の標準パイプラインはコントロールプレーンを再設定しない限り
-何も集計できない。今回のスコープ（OpenStack 側のみ・コントロールプレーンには触れない）では
-**Prometheus collector** を採用した:
-
-- `openstack-exporter`（`ghcr.io/openstack-exporter/openstack-exporter:2.0.0-alpha`。
-  1.7.0 stable / 1.8.0-alpha は cinder メトリクスが無く不可）が Polaris の API を
-  読み取りだけで叩く → Prometheus。
-- Prometheus の **recording rule** で `tenant_id` → `project_id` に寄せ、
-  1 プロジェクト 1 系列へ集約（`cloudkitty:vcpu:used` 等）。CloudKitty の
-  prometheus collector は `<metric>{project_id="<id>"}[<period>s]` という固定形の
-  クエリしか組み立てられない（`label_replace` 等を差し込めない）ため、この正規化層が必須。
-- CloudKitty: `collector = prometheus` / `fetcher = keystone` / `storage = influxdb(v2 API)` /
-  `period = 3600`。
-- コントロールプレーン（lc-sv01〜03 の Kolla）には一切変更を加えていない。
-
-将来 Ceilometer/Gnocchi をコントロールプレーンに入れられるなら Gnocchi collector に
-戻してもよい（Hashmap ルール自体は collector 非依存。service 名 = metric の alt_name を
-合わせるだけ）。
+**OpenStack 側の collector 選定について**: CloudKitty は Gnocchi collector
+（Ceilometer 経由でメータリングする、OpenStack の標準構成）と Prometheus collector
+（外部の openstack-exporter が API を読み取るだけでメータリングする構成）のいずれかを
+選べる。コントロールプレーン側で Ceilometer の通知パイプラインが有効化されていない・
+あるいはコントロールプレーンには手を入れたくない環境では Prometheus collector が
+現実的な選択肢になる（openstack-exporter → Prometheus の recording rule で
+`project_id` 単位の系列へ正規化 → CloudKitty が `<metric>{project_id="<id>"}[period]`
+形式でクエリ、の経路。Hashmap ルール自体は collector 非依存で、service 名を
+collector 側のメトリクス名に合わせるだけで両方式を行き来できる）。
+実際にどちらを採用したか・具体的な構成は環境ごとに異なるため
+`terraform/platform/infra/cloudkitty-infra/README.md` を参照。
 
 **Kubernetes（namespace 単位）のコスト管理について**: CloudKitty の `collector` と
 `scope_attribute` はいずれも1インスタンスにつき1つしか設定できないため、
@@ -446,6 +445,45 @@ K8s 用インスタンスの実装はこれから（未着手・今回のスコ�
 OpenStack 標準機能にも存在せず、まるごと自前実装が必要（Middleware API 側の実装課題として
 持ち越し。詳細は `08-billing.md`・`09-costs.md` の該当注記を参照）。
 
-実装タイミング: Phase 3（OpenStack platform）の一部として `terraform/platform/cloudkitty/` を追加。
-ローカル DevStack・Polaris（実 OpenStack 環境）ともに実機適用・`plan` clean 確認済み。
-Polaris 基盤の構築手順は `terraform/platform/cloudkitty-infra/README.md`。
+実装タイミング: Phase 3（OpenStack platform）の一部として `terraform/platform/openstack/cloudkitty/`
+を追加。複数の実 OpenStack 環境で実機適用・`plan` clean 確認済み。
+基盤の構築手順は `terraform/platform/infra/cloudkitty-infra/README.md`。
+
+**基盤の Terraform 化・Prometheus 分離 ✅ 完了（2026-09-04）**: CloudKitty 本体
+（`terraform/platform/infra/cloudkitty-infra/`）と Prometheus+exporter
+（`terraform/platform/infra/prometheus-infra/`、他の監視用途にも再利用できるよう
+独立した VM に分離）を、それぞれ `idp-infra` と同じ cloud-init ベースの
+Terraform root として実装。従来手動構築だった CloudKitty VM は
+`terraform import` で無停止のまま管理下に移行し、稼働中のまま
+Prometheus/exporter コンテナを停止・削除して新しい別 VM の Prometheus を
+参照するよう再設定した（実インフラは継続稼働・課金データ無影響）。
+実機で判明した罠（`tls_private_key` が import 非対応・`random_password` の
+`special` 属性・`security_group_rule` の `description` が force-new・
+Rocky Linux の `cockpit.socket` が既定でポート 9090 を握っている等）は
+`infra/idp-infra/README.md`・`infra/cloudkitty-infra/README.md`・
+`infra/prometheus-infra/README.md` にそれぞれ記録。
+
+**`idp/`・`members/`・`github/` の実機初回適用 ✅ 完了（2026-09-04）**:
+本番相当の実 Authentik（`idp/` 70+ リソース・SMTP・GitHub/Discord Source）、
+実メンバー1名の Authentik アカウント作成と入会メール送信（`members/`、実際に
+本人が受信してアカウント設定を完了するところまで確認）、実 `lc-tut`
+Organization の team 7件・branch protection・CODEOWNERS（`github/`、
+push 許可の実効性まで GraphQL で確認）を、それぞれ実機に対して適用・検証済み。
+過程で見つけた実バグ（`authentik_stage_prompt_field` の `sub_text` 末尾改行が
+永久 drift になる、`authentik_source_oauth.github` の `oidc_jwks_url` が
+サーバー側デフォルトで埋まる、`authentik_user.is_active` が
+`ignore_changes` に無く本人のアカウント有効化を巻き戻してしまう、
+`github_branch_protection` の `push_allowances` は対象チームに
+`github_team_repository` で何らかのリポジトリアクセス権を与えていないと
+サイレントに無視される）はいずれも該当 `.tf` のコメントとして残してある。
+
+> **重要**: 上記3つ（`idp/`・`members/`・`github/`）はいずれも、本番の
+> Ceph RGW backend ではなく `backend_override.tf` によるローカル state で
+> 検証・適用した（本番 backend の認証情報がこの検証環境に無いため。
+> `infra/idp-infra/README.md`「本番 Ceph RGW backend への適用時の注意」と
+> 同じ事情）。**実際の Authentik・GitHub 側には反映済みだが、本番 Ceph RGW
+> 上の state はこれらの変更を一切知らない。** 次に CI（本番 backend）から
+> apply すると、特に `github/` は「name must be unique」等で失敗し、
+> `idp/`・`members/` は空の state から重複作成を試みる。本番運用に戻す前に、
+> ローカルで作った state を本番 backend へ移す（`terraform state push` 等）か、
+> 同じ手順で改めて import し直す必要がある。

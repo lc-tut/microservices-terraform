@@ -57,7 +57,7 @@ org/
 |------|:---:|:---:|:---:|:---:|:---:|:---:|
 | `platform/members/` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `platform/idp/` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `platform/quotas/` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `platform/openstack/quotas/` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `platform/github/` | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | `modules/` | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | `catalog/billing-accounts/` | ✅ | ❌ | ✅ | ❌ | [PR] | [PR]（個人のみ） |

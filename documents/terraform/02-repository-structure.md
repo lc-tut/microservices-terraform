@@ -37,14 +37,22 @@ microservices-terraform/
 │   │   │   │                          #   ＝ lcn_xxxxxx 以外の個人情報を匿名化。.sops.yaml 参照）
 │   │   │   ├── alumni/                # 卒業・退会済みで連絡不要なメンバー（ob-og と同じ暗号化方針）
 │   │   │   └── auto-gen-github-usernames.yaml  # Bot: GitHub username マップ（OAuth連携時、平文・全体共通）
-│   │   ├── network/                   # VPC Gateway・外部ネットワーク・subnetpool
-│   │   │   ├── gateway.tf             # VPC Gateway ルーター
-│   │   │   ├── subnetpool.tf          # IP 帯域マスタープール
-│   │   │   └── external_network.tf    # 外部ネットワーク・RBAC
-│   │   ├── images/                    # ベース VM イメージ管理
+│   │   ├── openstack/                 # OpenStack API を直接操作する platform 層リソース
+│   │   │   │                          #   （各サブディレクトリが独立した Terraform root）
+│   │   │   ├── network/                 # VPC Gateway・外部ネットワーク・subnetpool
+│   │   │   │   ├── gateway.tf           # VPC Gateway ルーター
+│   │   │   │   ├── subnetpool.tf        # IP 帯域マスタープール
+│   │   │   │   └── external_network.tf  # 外部ネットワーク（data 参照のみ）
+│   │   │   ├── quotas/                  # グローバルデフォルトクォータ（quota-class-set）
+│   │   │   │   └── main.tf
+│   │   │   └── cloudkitty/              # CloudKitty Hashmap 課金ルール（Credit 単価）
+│   │   │       └── main.tf
+│   │   ├── images/                    # ベース VM イメージ管理（未着手）
 │   │   │   └── main.tf                # SSH CA 組み込み済みイメージ
-│   │   ├── quotas/                    # LC-Cloud クォータティア定義
-│   │   │   └── main.tf
+│   │   ├── infra/                     # platform ソフトウェアをホストする VM のプロビジョニング
+│   │   │   ├── idp-infra/               # Authentik インスタンス本体（VM + Docker Compose）
+│   │   │   ├── cloudkitty-infra/        # CloudKitty 本体（VM + Docker Compose）
+│   │   │   └── prometheus-infra/        # Prometheus + openstack-exporter（VM + Docker Compose）
 │   │   └── github/                    # GitHub Organization 設定
 │   │       ├── teams.tf               # GitHub Teams 定義
 │   │       ├── branch_protection.tf   # ブランチ保護・PR 承認ルール
@@ -120,6 +128,23 @@ microservices-terraform/
 
 ---
 
+## `platform/` 内のカテゴリ分け
+
+`platform/` 直下は性質の異なるものが混在しやすいため、3種類に分けています。
+
+| カテゴリ | ディレクトリ | 何をするところか |
+|---|---|---|
+| OpenStack リソース | `openstack/<name>/` | OpenStack（や CloudKitty 等その上のサービス）の API を直接操作し、platform 全体の土台（ネットワーク・クォータ・課金ルール）を宣言する。各 `<name>/` が独立した Terraform root |
+| インフラ（VM ホスティング） | `infra/<name>/` | platform ソフトウェア（Authentik・CloudKitty 本体等）を動かす VM 自体をプロビジョニングする。各 `<name>/` が独立した Terraform root で、対応する `openstack/`・トップレベルの概念的な root が接続先として参照する |
+| 概念・IDP/API の登録 | `idp/`・`github/`・`members/` | OpenStack を直接は操作せず、Authentik・GitHub・メンバー台帳といった「組織としての概念」を宣言する |
+
+実機構成の詳細（IP アドレス・認証情報の出所・デプロイ手順等）は各 `README.md`
+（`openstack/cloudkitty/README.md` や `infra/idp-infra/README.md` 等）を参照してください。
+このドキュメント群（`documents/terraform/`）は特定の実機環境の詳細には立ち入らず、
+設計そのものを説明します。
+
+---
+
 ## CODEOWNERS 設計
 
 承認権限の管理は Tier ごとに仕組みを使い分けます。詳細は `10-roles-and-permissions.md` を参照してください。
@@ -138,7 +163,7 @@ microservices-terraform/
 |------|---------|------|----------|-------|
 | メンバー追加・削除 | `terraform/platform/members/` | 🔴 | circle-admin / tech-lead | circle-admin / tech-lead |
 | IdP フロー・ポリシー変更 | `terraform/platform/idp/` | 🔴 | circle-admin / tech-lead / lc-cloud-infra | circle-admin / tech-lead / lc-cloud-infra |
-| クォータティア定義変更 | `terraform/platform/quotas/` | 🔴 | circle-admin / tech-lead / lc-cloud-infra | circle-admin / tech-lead / lc-cloud-infra |
+| クォータティア定義変更 | `terraform/platform/openstack/quotas/` | 🔴 | circle-admin / tech-lead / lc-cloud-infra | circle-admin / tech-lead / lc-cloud-infra |
 | GitHub Org 設定変更 | `terraform/platform/github/` | 🔴 | circle-admin / tech-lead / lc-cloud-platform | circle-admin / tech-lead / lc-cloud-platform |
 | モジュール変更 | `terraform/modules/` | 🔴 | circle-admin / tech-lead / lc-cloud-platform | circle-admin / tech-lead / lc-cloud-platform |
 | 個人請求アカウントのカスタマイズ | `terraform/catalog/billing-accounts/personal/<name>/` | 🟡 | 本人 [PR] | circle-admin / lc-cloud-infra |

@@ -82,7 +82,7 @@ CODEOWNERS による承認ゲートを通過してから apply する。
 | VM の起動・停止・ログ等の運用操作 | Middleware API が担当（`13-operation-layers.md`） |
 | アプリケーションのデプロイ | GitOps（ArgoCD/FluxCD）がチーム・プロジェクトに委任 |
 | オブジェクトストレージへのファイル転送 | Swift / S3 互換 CLI で直接操作 |
-| LC-Cloud インフラ自体（OpenStack・K8s 構築） | Polaris チームの IaC リポジトリで管理 |
+| LC-Cloud インフラ自体（OpenStack・K8s 構築） | インフラチームの別 IaC リポジトリで管理 |
 
 ---
 

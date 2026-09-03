@@ -609,13 +609,18 @@ resource "kubernetes_network_policy" "allow_from_extra" {
 
 ---
 
-## platform/quotas/ の役割
+## platform/openstack/quotas/ の役割
 
-`terraform/platform/quotas/` は **OpenStack グローバルデフォルト**（カスタマイズ未設定の全プロジェクトに適用される値）を管理します。
+`terraform/platform/openstack/quotas/` は **OpenStack グローバルデフォルト**（カスタマイズ未設定の全プロジェクトに適用される値）を管理します。
 ティア定義はモジュール内に持ち、このスタックはデフォルト値の設定のみを担います。
 
+> **注意**: 以下の `openstack_compute_quota_defaults_v2` は説明用の擬似コードです。
+> この Terraform Provider にこの名前のリソースは存在しません。実際の実装は
+> `terraform/platform/openstack/quotas/main.tf`（Nova/Cinder の quota-class-set
+> API を `restapi` プロバイダーで直接操作）を参照してください。
+
 ```hcl
-# terraform/platform/quotas/main.tf
+# 以下は設計時点の擬似コード（実装は上記参照）
 # catalog/billing-accounts/ でカスタマイズしていない全プロジェクトに適用されるデフォルト値
 # 個人デフォルト = lc-micro、チームデフォルト = lc-small に相当する値を設定する
 

@@ -14,7 +14,7 @@ LC-Cloud 上の請求アカウントはデフォルト設定で自動プロビ�
             catalog/billing-accounts/<type>/<name>/ を追加して PR
 ```
 
-デフォルトクォータは `terraform/platform/quotas/` で管理者が設定します（OpenStack グローバルデフォルト）。
+デフォルトクォータは `terraform/platform/openstack/quotas/` で管理者が設定します（OpenStack グローバルデフォルト）。
 クォータティアの詳細は `07-quota.md` を参照してください。
 
 | 種別 | デフォルトティア | デフォルト予算 |
@@ -35,7 +35,7 @@ LC-Cloud 上の請求アカウントはデフォルト設定で自動プロビ�
 | 作成タイミング | メンバー入会時に SCIM 連携で LC-Cloud プロジェクトを自動作成 |
 | オーナー | Authentik ユーザー ID に紐づく（1人1アカウント） |
 | 共有 | **不可**。他のメンバー・チームからの参照を LC-Cloud 側でブロック |
-| デフォルトクォータ | `lc-micro`（`platform/quotas/` で設定） |
+| デフォルトクォータ | `lc-micro`（`platform/openstack/quotas/` で設定） |
 | カスタマイズ | `catalog/billing-accounts/personal/<username>/` を作成して PR（管理者承認） |
 | 無効化 | メンバーを `alumni/` に移動した時点で apply → 自動無効化 |
 
@@ -46,7 +46,7 @@ LC-Cloud 上の請求アカウントはデフォルト設定で自動プロビ�
 | 作成タイミング | チーム作成時に LC-Cloud プロジェクトを自動作成 |
 | オーナー | 申請チーム（複数チームの共同参照も可） |
 | 共有 | **可**。複数チームやプロジェクトが同一アカウントを参照できる |
-| デフォルトクォータ | `lc-small`（`platform/quotas/` で設定） |
+| デフォルトクォータ | `lc-small`（`platform/openstack/quotas/` で設定） |
 | カスタマイズ | `catalog/billing-accounts/teams/<name>/` を作成して PR（管理者承認） |
 | 無効化 | 所属チームがすべてアーカイブされた後、管理者が apply で削除 |
 
@@ -90,7 +90,7 @@ LC-Cloud (OpenStack)
 > `documents/terraform/16-implementation-phases.md` の
 > 「[P5] CloudKitty の導入方針」を参照してください。
 > 現状 Terraform で実際に操作できるのは CloudKitty の Hashmap レーティング
-> ルール（`terraform/platform/cloudkitty/`・`modules/cloudkitty-service/`、
+> ルール（`terraform/platform/openstack/cloudkitty/`・`modules/cloudkitty-service/`、
 > 実機検証済み）までで、それより上のクォータ設定（`modules/lc-cloud-quota`）は
 > `project_id` があれば動きますが、予算・Organization 周りはこのドキュメントの
 > 設計イメージのみです。
@@ -100,7 +100,7 @@ LC-Cloud (OpenStack)
 > | 機能 | CloudKitty で足りる？ | 備考 |
 > |---|---|---|
 > | メトリクス（使用量）×単価＝金額の計算 | ✅ 足りる | Hashmap ルールとして実装・実機検証済み |
-> | OpenStack リソース1種別ごとの金額算出 | ✅ 足りる | `terraform/platform/cloudkitty/`（Gnocchi collector） |
+> | OpenStack リソース1種別ごとの金額算出 | ✅ 足りる | `terraform/platform/openstack/cloudkitty/`。採用した collector は環境依存（`terraform/platform/infra/cloudkitty-infra/README.md` 参照） |
 > | Kubernetes namespace 単位の金額算出 | ✅ 足りる（別インスタンスとして） | 未着手。Prometheus collector・`scope_attribute=namespace` |
 > | 「Organization」という概念（project + 予算上限 + Credit残高） | ❌ 自前実装が要る | Keystone project にも CloudKitty にも該当メタデータが無い。独自 DB か Middleware API 側のデータモデルとして持つ想定 |
 > | 複数 CloudKitty インスタンス（OpenStack用・K8s用）の結果を Organization 単位で合算 | ❌ 自前実装が要る | CloudKitty は自分が計算した範囲しか知らず、他インスタンスの結果を横断して見に行く機能が無い。Middleware API 側でのバッチ集計を想定 |
@@ -304,7 +304,7 @@ terraform/catalog/billing-accounts/
 ### デフォルトクォータの変更（全体に影響）
 
 ```text
-terraform/platform/quotas/ の OpenStack グローバルデフォルトを変更して PR
+terraform/platform/openstack/quotas/ の OpenStack グローバルデフォルトを変更して PR
 → 管理者承認 → apply
 → catalog/billing-accounts/ で個別設定していないすべてのアカウントに反映
 ```
