@@ -74,9 +74,13 @@ Terraform が作成するリソース:
 | Project Network | プロジェクト専用 private network |
 | Project Subnet | subnetpool から /24 を払い出し |
 | Router Interface | VPC Gateway への接続 |
-| DNS Zone | `<project>.lc-cloud.example.` |
 | Application Credential | Access Rules 付き。Workspace CI/CD 用 |
 | GitHub Actions Secret | Application Credential を Workspace に渡す |
+
+> DNS Zone・LB Pool はこの Phase では作らない。個別プロジェクトが自分の
+> LB・DNS ゾーンを持つ設計は「独自 LB 作成禁止」方針と矛盾するため廃止した。
+> DNS は Phase 8、外部公開（共有 Ingress Controller + 1 個の Octavia LB）は
+> Phase 9 で扱う。詳細は `16-implementation-phases.md` の `[P10]` を参照。
 
 ```hcl
 # terraform/catalog/projects/_template/lc_cloud.tf
@@ -111,12 +115,6 @@ resource "openstack_networking_router_interface_v2" "project" {
   subnet_id = openstack_networking_subnet_v2.project.id
 }
 
-# DNS ゾーン
-resource "openstack_dns_zone_v2" "project" {
-  name  = "${var.project_name}.lc-cloud.example."
-  email = "admin@lc-cloud.example"
-}
-
 # Workspace CI/CD 用 Application Credential（Access Rules 付き）
 resource "openstack_identity_application_credential_v3" "workspace_ci" {
   name        = "${var.project_name}-ci"
@@ -147,12 +145,6 @@ resource "github_actions_secret" "app_cred_secret" {
 # terraform/catalog/projects/_template/outputs.tf
 output "network_name"  { value = openstack_networking_network_v2.project.name }
 output "subnet_name"   { value = openstack_networking_subnet_v2.project.name }
-output "dns_zone_id"   { value = openstack_dns_zone_v2.project.id }
-output "lb_pool_http_id" {
-  value       = openstack_lb_pool_v2.http.id
-  description = "Workspace が LB pool member を追加する際に参照する"
-}
-output "lb_public_ip" { value = openstack_networking_floatingip_v2.lb.address }
 ```
 
 ---
@@ -171,26 +163,14 @@ module "app" {
   image     = "ubuntu-24.04-lts"
   user_data = file("cloud-init.yaml")
 }
-
-# LB pool に追加（catalog が作成した LB を参照）
-data "terraform_remote_state" "catalog" {
-  backend = "s3"
-  config  = { key = "tfstate/terraform/catalog/projects/my-product/terraform.tfstate", ... }
-}
-
-resource "openstack_lb_member_v2" "app" {
-  pool_id       = data.terraform_remote_state.catalog.outputs.lb_pool_http_id
-  address       = module.app.ip_address
-  protocol_port = 8080
-}
-
-resource "openstack_dns_recordset_v2" "app" {
-  zone_id = data.terraform_remote_state.catalog.outputs.dns_zone_id
-  name    = "myapp.lc-cloud.example."
-  type    = "A"
-  records = [data.terraform_remote_state.catalog.outputs.lb_public_ip]
-}
 ```
+
+外部公開（共有 Ingress Controller 経由）と DNS レコード払い出しは、
+それぞれ Phase 9・Phase 8 の実装待ち。プロジェクトが自分専用の LB や
+DNS ゾーンを持つことはない（`16-implementation-phases.md` の `[P10]`
+参照）。Phase 9 実装後は、Workspace 側で VM の internal IP を headless
+Service として登録するだけで、共有 `ingress-nginx` 経由の外部公開・
+ホスト名割り当てができるようになる想定。
 
 ### Middleware API / GUI で操作するもの（運用・実験）
 

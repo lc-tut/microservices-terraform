@@ -15,7 +15,13 @@ Phase 4  catalog（billing / teams / projects）
 Phase 5  workspace モジュール
 Phase 6  Middleware API
 Phase 7  GitOps
+Phase 8  DNS（Designate）
+Phase 9  共有 Ingress / LB（Octavia）
 ```
+
+Phase 8・9 は、実機 Polaris の Service Catalog に Designate・Octavia が
+まだ存在しないため後回しにしている（`## Phase 8`・`## Phase 9` の備考参照）。
+導入され次第、番号に関わらず着手してよい。
 
 フェーズ間の依存関係:
 
@@ -26,6 +32,8 @@ Phase 0
             └─ Phase 3（OpenStack platform）
                  └─ Phase 4（catalog）
                       ├─ Phase 5（workspace modules）
+                      │    └─ Phase 8（DNS）
+                      │         └─ Phase 9（共有 Ingress / LB）
                       └─ Phase 6（Middleware API）
                            └─ Phase 7（GitOps）
 ```
@@ -214,13 +222,19 @@ Phase 3 の3項目（network・images・quotas）は全て実装・実機適用�
    - `_template/outputs.tf` — `organization_id` を公開
 
 1. `terraform/catalog/projects/` テンプレート実装
-   - `_template/lc_cloud.tf` — ネットワーク・Subnet・Router Interface・DNS Zone
+   - `_template/lc_cloud.tf` — ネットワーク・Subnet・Router Interface
    - Application Credential（Access Rules 付き）の発行
    - GitHub Actions Secret への自動登録（`github_actions_secret` リソース）
    - `_template/harbor.tf` — Harbor プロジェクト + RBAC
 
 **成果物**: `_template` をコピーして PR を出すだけで
 OpenStack プロジェクト・ネットワーク・Application Credential が払い出される状態。
+
+> DNS Zone・LB Pool はこの Phase では作らない。個別プロジェクトが自分の
+> LB・floating IP を持つ設計は `12-openstack-resources.md`／`07-quota.md`
+> の「独自 LB 作成禁止・`services.loadbalancers = 0` 強制」方針と矛盾するため
+> 廃止した（[P10] 参照）。DNS は Phase 8、外部公開の実体（共有 Ingress
+> Controller + 1 個の Octavia LB）は Phase 9 で扱う。
 
 ---
 
@@ -309,6 +323,75 @@ GUI から VM 操作・ログ確認・課金閲覧ができる状態。
 
 ---
 
+## Phase 8 — DNS（Designate）
+
+**目標**: プロジェクトのアプリに人間が読めるホスト名を割り当てられるようにする。
+
+**前提条件**:
+
+- 実機 Polaris に Designate サービスが導入されていること
+- Phase 4 完了
+
+**作業内容**:
+
+1. Designate 導入状況の確認・インフラ担当への導入依頼
+1. `terraform/catalog/projects/_template/` に `openstack_dns_zone_v2` を追加
+1. `modules/lc-dns-record`（Phase 5 で予定）との連携確認
+
+**成果物**: プロジェクトごとに `<project>.lc-cloud.example.` ゾーンが自動払い出しされる状態。
+
+> **備考**: 実機 Polaris の Service Catalog には現時点（2026-09-04 確認）で
+> Designate が存在しない（`openstack catalog list` の結果は
+> cloudkitty・heat・placement・keystone・glance・neutron・cinder・nova・heat-cfn
+> のみ）。導入時期未定のため、実装は Designate が使えるようになってから着手する。
+
+---
+
+## Phase 9 — 共有 Ingress / LB（Octavia）
+
+**目標**: OpenStack VM アプリ・k8s アプリの両方を、1 個の共有 Octavia LB +
+k8s Ingress Controller に集約して外部公開する。プロジェクトごとの個別 LB
+作成は行わない。
+
+**前提条件**:
+
+- 実機 Polaris に Octavia サービスが導入されていること
+- Phase 5 完了（k8s クラスターが存在すること）
+- Phase 8（DNS）— ホスト名ベースのルーティングを使うなら実質必須
+
+**設計方針（決定事項、詳細は [P10] 参照）**:
+
+- Octavia LB は全体で 1 個のみ。k8s の `ingress-nginx` Controller の
+  Service（`type=LoadBalancer`）がそれを払い出す。プロジェクト単位で
+  LB Pool を作ることはしない（`07-quota.md` の
+  `services.loadbalancers = 0` 強制・`12-openstack-resources.md` の
+  「独自 LB 作成禁止」に準拠）。
+- k8s アプリ: k8s `Ingress` リソース経由でそのまま共有 Controller に乗る。
+- OpenStack VM（k8s を使わないプロジェクト）: VM の internal IP を
+  selector 無し + 手動 `Endpoints` の headless Service として登録し、
+  同じ Ingress 経由でルーティングする。個別 floating IP・LB は持たない。
+- 管理用 API（infra-api・k8s-api、`14-middleware-architecture.md`）も
+  同じ共有 Controller に相乗りし、path（`/api/infra/*`・`/api/k8s/*`）と
+  Authentik の JWT 検証で権限を分離する。管理用・ユーザー用で LB を
+  物理的に分けることはしない。
+
+**作業内容**:
+
+1. Octavia 導入状況の確認
+1. k8s クラスターに `ingress-nginx` をデプロイし、
+   `Service type=LoadBalancer` で Octavia LB を払い出す
+1. OpenStack VM プロジェクト向け headless Service + `Endpoints` 払い出し
+   手順の整備（`modules/lc-vm` または新規モジュール）
+1. `catalog/projects/_template` からの DNS recordset 連携
+
+**成果物**: プロジェクトが個別に LB・floating IP を意識せず、
+ホスト名を割り当てるだけで外部公開できる状態。
+
+> **備考**: 実機 Polaris の Service Catalog には Octavia も現時点で
+> 存在しない。Designate 同様、導入され次第着手する。
+
+---
+
 ## レビューと決定事項
 
 ### ✅ 解決済み
@@ -381,6 +464,27 @@ terraform apply
 **[P8] `01-overview.md` のドキュメント一覧 → 更新済み**
 
 **[P9] `06-cicd.md` の Vault URL → GitHub Secrets 移行に伴い不要**
+
+**[P10] プロジェクト単位 LB Pool 廃止 → 共有 Ingress Controller 1 本に統一（2026-09-04）**
+
+`05-project-lifecycle.md` の `catalog/projects/_template/lc_cloud.tf` は
+プロジェクトごとに `openstack_lb_pool_v2.http` を作る例を示していたが、
+これは `07-quota.md`（全 tier で `services.loadbalancers = 0` 強制）・
+`12-openstack-resources.md`（「独自 LB の作成は禁止。K8s アプリは
+Kubernetes Ingress Controller 経由」）と矛盾していた。後者の方が新しく
+詳細な設計のため、そちらを正とし前者の記述は削除する。
+
+正しい設計は「Octavia LB は LC-Cloud 全体で 1 個のみ。k8s の共有
+`ingress-nginx` Controller がそれを払い出し、k8s アプリはもちろん、
+k8s を使わない OpenStack VM アプリも headless Service 経由で同じ
+Controller に相乗りする」という一本化。管理用 API
+（infra-api・k8s-api）も同じ Controller に乗り、LB を物理的に分けず
+path・JWT 認証で権限を分離する（VM・k8s それぞれに別の LB を用意する
+「LB の LB」構成にはしない）。
+
+DNS Zone（Designate）・共有 Ingress/LB（Octavia）はいずれも実機 Polaris
+にサービス自体が存在しないため、Phase 4 のスコープから外し、
+Phase 8・Phase 9 として後回しにした。詳細は該当フェーズの節を参照。
 
 ---
 
