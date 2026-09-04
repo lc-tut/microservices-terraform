@@ -1,0 +1,15 @@
+terraform {
+  # _template/ をコピーしたら key の "_template" を実際のチーム名に変更すること。
+  backend "s3" {
+    bucket = "linuxclub-tfstate"
+    key    = "tfstate/terraform/catalog/billing-accounts/teams/_template/terraform.tfstate"
+    region = "us-east-1"
+
+    use_lockfile                = true
+    use_path_style              = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+  }
+}

@@ -212,23 +212,54 @@ Phase 3 の3項目（network・images・quotas）は全て実装・実機適用�
 
 **作業内容**:
 
-1. `terraform/catalog/billing-accounts/` テンプレート実装
-   - `personal/_template/`
-   - `teams/_template/`
-   - CloudKitty との連携（予算・通知）
+1. `terraform/catalog/teams/_template/` 実装 ✅
+   - `authentik.tf` — Authentik グループ
+   - `lc_cloud.tf` — `openstack_identity_project_v3`（Keystone project）+
+     `modules/lc-cloud-quota`。自動化アカウントへの `member` ロール付与も
+     ここで行う（`catalog/projects/` が Application Credential を
+     セルフサービス発行するために必要。README 参照）
+   - `outputs.tf` — `openstack_project_id`・`authentik_group_id`
 
-1. `terraform/catalog/teams/` テンプレート実装
-   - `_template/authentik.tf` — Authentik グループ
-   - `_template/outputs.tf` — `organization_id` を公開
+1. `terraform/catalog/projects/_template/` 実装 ✅
+   - `lc_cloud.tf` — ネットワーク・Subnet（`platform/openstack/network/` の
+     subnetpool から）・Router Interface・Application Credential
+     （Access Rules 付き、`team_project_id` にスコープしなおした provider で発行）
+   - GitHub Actions Secret への自動登録は未実装（意図的に保留。下記参照）
 
-1. `terraform/catalog/projects/` テンプレート実装
-   - `_template/lc_cloud.tf` — ネットワーク・Subnet・Router Interface
-   - Application Credential（Access Rules 付き）の発行
-   - GitHub Actions Secret への自動登録（`github_actions_secret` リソース）
-   - `_template/harbor.tf` — Harbor プロジェクト + RBAC
+1. `terraform/catalog/billing-accounts/` テンプレート実装 ✅
+   - `personal/_template/`・`teams/_template/` — クォータ上書きのみ
+     （デフォルトから変更する場合のみ使う。`08-billing.md` 参照）
+   - CloudKitty との連携（予算・通知）は未実装（下記参照）
 
 **成果物**: `_template` をコピーして PR を出すだけで
 OpenStack プロジェクト・ネットワーク・Application Credential が払い出される状態。
+`terraform validate` は全 template で確認済み。**`catalog/teams/`・
+`catalog/projects/` は実機 Polaris でエンドツーエンド検証済み**
+（`sandbox-test` という名前でチーム・プロジェクトを実際に作成し、
+Keystone project・role assignment・Authentik Group・クォータ3種・
+network/subnet/router interface・Application Credential が全て実際に
+作られたことを `openstack`/Authentik API で確認した上で `terraform destroy`
+して削除。2026-09-04）。`terraform/catalog/billing-accounts/` は
+（前提となる team/project の apply 後に）同様に動作する見込みだが、
+個別には検証していない。
+
+> **実装できなかった／意図的に保留した部分**（設計文書との差分。詳細は各
+> `_template/README.md`・`[P3]`・`[P10]` 参照）:
+> - **GitHub Actions Secret への自動登録**: `workspaces/` を CI/CD apply する
+>   仕組みがまだ整備できていないため保留。Application Credential は
+>   state にのみ保存し、`terraform output -raw app_cred_secret` で手動取得する。
+>   GitHub Actions 側の CI/CD 整備後に `github_actions_secret` を追加する。
+> - **「Organization」（予算上限・Credit 残高）**: Keystone にも CloudKitty
+>   にも存在しない独自概念で、Middleware API 側の自前実装が要る（未着手）。
+>   `catalog/teams/`・`catalog/billing-accounts/` は素の Keystone project +
+>   クォータのみを扱い、予算・Credit 残高は扱わない。
+> - **個人 OpenStack project の自動作成**: `platform/members/` にまだ実装が
+>   無い。`catalog/billing-accounts/personal/_template/` は対応する project が
+>   存在する前提で動くため、現状は使えない（前提が整うまでの先行実装）。
+> - **DNS Zone・LB Pool**: Designate・Octavia とも実機 Polaris 未導入のため
+>   Phase 8・Phase 9 に切り出した（`[P10]`）。
+> - **Harbor Project 連携**: `terraform/platform/harbor/` で Harbor 本体の
+>   OIDC 設定は実装済みだが、プロジェクト単位の Harbor Project 自動作成は未実装。
 
 > DNS Zone・LB Pool はこの Phase では作らない。個別プロジェクトが自分の
 > LB・floating IP を持つ設計は `12-openstack-resources.md`／`07-quota.md`
@@ -430,10 +461,23 @@ Authentik を OIDC IdP として Keystone に連携し、ユーザーをコピ�
 `openstack_identity_project_v3` + クォータ設定を行う。
 `catalog/teams/` からは `module "org"` で呼び出す。
 
+**（訂正・2026-09-04）**: 実装時、間に挟む `modules/lc-cloud-organization/`
+モジュール自体を作らず、`catalog/teams/_template/lc_cloud.tf` に
+`openstack_identity_project_v3` + `module "quota"`（`modules/lc-cloud-quota`）を
+直接書く形にした（ラッパーを1層挟む意味が薄いため）。「Organization」という
+予算・Credit 残高を持つ独自概念は元々別の課題（Middleware API 側の自前実装、
+未着手）であり、この module 云々とは無関係。詳細は
+`terraform/catalog/teams/_template/lc_cloud.tf` のコメント参照。
+
 **[P4] Harbor → `enable_harbor` フラグで後から追加**
 
 Harbor は提供予定だが構築タイミングが未定のため、
 `catalog/projects/_template/harbor.tf` に `count = var.enable_harbor ? 1 : 0` を追加する。
+
+**（進捗・2026-09-04）**: Harbor 本体（`terraform/platform/infra/harbor-infra/`、
+実機適用済み）と Authentik OIDC 連携（`terraform/platform/harbor/`）は実装済み。
+`catalog/projects/_template/harbor.tf`（プロジェクト単位の Harbor Project 自動作成、
+`enable_harbor` フラグ）はまだ未実装。
 Phase 4 を Harbor 待ちにする必要はない。
 
 **[P6] Phase 1 の手動 apply → circle-admin が担当**

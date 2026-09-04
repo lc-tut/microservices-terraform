@@ -103,7 +103,7 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 
 | リソース | 分類 | 管理フォルダ | 備考 |
 | --- | --- | --- | --- |
-| `openstack_identity_project_v3` | 🔴 Tier 1 | `platform/idp/` | プロジェクト作成は admin のみ |
+| `openstack_identity_project_v3` | 🟡 Tier 2 | `catalog/teams/` | チーム作成時に admin 権限で作成（05-project-lifecycle.md 参照） |
 | `openstack_identity_user_v3` | 🔴 Tier 1 | `platform/idp/` | SCIM 経由で Authentik が provisioning |
 | `openstack_identity_group_v3` | 🔴 Tier 1 | `platform/idp/` | SCIM 経由で Authentik が provisioning |
 | `openstack_identity_role_v3` | 🔴 Tier 1 | `platform/idp/` | |
@@ -356,6 +356,7 @@ Workspace 向けに提供する便利モジュール一覧。
 | `platform/openstack/network/` | subnetpool・外部 network・VPC Gateway router・RBAC policy |
 | `platform/openstack/images/` | base image・image access |
 | `platform/openstack/quotas/` | compute / storage / network / LB quota |
-| `platform/idp/` | project・user・group・role・role assignment（SCIM 経由も含む） |
-| `catalog/projects/<name>/` | project network・subnet（/24）・router interface・application credential（Access Rules 付き）・dns zone |
+| `platform/idp/` | user・group・role・role assignment |
+| `catalog/teams/<name>/` | project（Keystone）・クォータ（`modules/lc-cloud-quota`） |
+| `catalog/projects/<name>/` | project network・subnet（/24）・router interface・application credential（Access Rules 付き） |
 | `workspaces/<name>/` | インスタンス・ボリューム・SG・オブジェクトストレージ・DNS recordset・シークレット・DB・Kubernetes リソース |
