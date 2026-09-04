@@ -46,6 +46,15 @@ variable "lc_cloud_oidc_client_secret" {
   default   = ""
 }
 
+# Harbor OIDC プロバイダ — 空文字のままにするとプロバイダは作成されない。
+# terraform/platform/infra/harbor-infra/ の `terraform output -raw harbor_url` を渡す。
+# client_secret は Authentik 側が生成する（terraform/platform/harbor/ に渡す出力
+# harbor_oidc_client_secret を参照）ため variable は無い。
+variable "harbor_url" {
+  type    = string
+  default = ""
+}
+
 # enrollment 完了 / GitHub 連携変更 の Webhook HMAC シークレット
 # 空文字のままにすると通知 Transport は作成されない
 variable "webhook_secret" {

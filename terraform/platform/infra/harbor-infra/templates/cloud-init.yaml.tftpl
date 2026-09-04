@@ -1,0 +1,152 @@
+#cloud-config
+# terraform/platform/infra/harbor-infra が生成。手で編集しても apply で上書きされる。
+#
+# Harbor 公式の online installer（install.sh）をそのまま使う。docker-compose.yml
+# を自前で書く idp-infra/cloudkitty-infra/prometheus-infra とは違い、Harbor は
+# core/jobservice/registry/registryctl/portal/redis/postgresql(+trivy) の
+# 依存関係が複雑で、公式インストーラが prepare スクリプトで生成する構成に
+# 素直に従う方が壊れにくい。
+
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - 1.1.1.1
+    - 8.8.8.8
+
+write_files:
+  - path: /opt/harbor/harbor.yml
+    permissions: "0600"
+    # harbor_admin_password・database.password が平文で入るため 0600。
+    content: |
+      hostname: ${harbor_hostname}
+
+      http:
+        port: 80
+
+      harbor_admin_password: ${harbor_admin_password}
+
+      database:
+        password: ${harbor_db_password}
+        max_idle_conns: 100
+        max_open_conns: 900
+        conn_max_lifetime: 5m
+        conn_max_idle_time: 0
+
+      data_volume: /data
+
+      trivy:
+        ignore_unfixed: false
+        skip_update: false
+        skip_java_db_update: false
+        offline_scan: false
+        security_check: vuln
+        insecure: false
+        timeout: 5m0s
+
+      jobservice:
+        max_job_workers: 10
+        job_loggers:
+          - STD_OUTPUT
+          - FILE
+        logger_sweeper_duration: 1
+
+      notification:
+        webhook_job_max_retry: 10
+        webhook_job_http_client_timeout: 3
+
+      log:
+        level: info
+        local:
+          rotate_count: 50
+          rotate_size: 200M
+          location: /var/log/harbor
+
+      _version: 2.12.0
+
+      proxy:
+        http_proxy:
+        https_proxy:
+        no_proxy:
+        components:
+          - core
+          - jobservice
+          - trivy
+
+      upload_purging:
+        enabled: true
+        age: 168h
+        interval: 24h
+        dryrun: false
+
+      cache:
+        enabled: false
+        expire_hours: 24
+
+  - path: /etc/systemd/system/harbor.service
+    permissions: "0644"
+    # install.sh が /opt/harbor/docker-compose.yml を生成した後は、これで
+    # 起動・停止を管理する（他の infra root と同じ「systemd が docker compose を
+    # ラップする」方式に揃える）。install.sh 自体は初回起動のみ実行し、以後の
+    # 再起動はこのユニットが担当する。
+    content: |
+      [Unit]
+      Description=Harbor (docker compose)
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/harbor
+      ExecStart=/usr/bin/docker compose up -d --remove-orphans
+      ExecStop=/usr/bin/docker compose down
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # Docker CE は 2026 時点で Rocky/EL10 向け RPM を未提供
+  # （terraform/platform/infra/idp-infra/templates/cloud-init.yaml.tftpl と同じ罠・同じ回避策）。
+  - path: /etc/yum.repos.d/docker-ce.repo
+    permissions: "0644"
+    content: |
+      [docker-ce-stable]
+      name=Docker CE Stable - EL9 (pinned; EL10 packages not yet published)
+      baseurl=https://download.docker.com/linux/centos/9/x86_64/stable
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://download.docker.com/linux/centos/gpg
+
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "firewall-backend": "nftables"
+      }
+
+  - path: /etc/sysctl.d/99-docker-forward.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+runcmd:
+  - [bash, -c, "systemctl disable --now firewalld 2>/dev/null || true"]
+  - [bash, -c, "sysctl -p /etc/sysctl.d/99-docker-forward.conf"]
+  - [bash, -c, "dnf -y install dnf-plugins-core curl tar || true"]
+  - [bash, -c, "for i in 1 2 3 4 5; do dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin && break; echo 'docker install retry'; sleep 20; done"]
+  - [systemctl, enable, "--now", docker]
+
+  # Harbor online installer を取得・展開する。harbor.yml は write_files で
+  # 既に /opt/harbor/harbor.yml に置かれているので、展開後もそのまま使われる
+  # （tarball 側は harbor.yml.tmpl という別名なので上書きされない）。
+  - [bash, -c, "for i in 1 2 3; do curl -fsSL -o /opt/harbor-online-installer.tgz https://github.com/goharbor/harbor/releases/download/${harbor_version}/harbor-online-installer-${harbor_version}.tgz && break; echo 'harbor installer download retry'; sleep 20; done"]
+  - [bash, -c, "tar xzf /opt/harbor-online-installer.tgz -C /opt"]
+  - [bash, -c, "chmod +x /opt/harbor/install.sh /opt/harbor/prepare"]
+
+  # install.sh が内部で `docker compose pull && docker compose up -d` まで行う。
+  # イメージ取得はネットワーク次第で失敗しうるのでリトライする。
+  - [bash, -c, "cd /opt/harbor && for i in 1 2 3; do ./install.sh ${harbor_with_trivy ? "--with-trivy" : ""} && break; echo 'harbor install.sh retry'; sleep 20; done"]
+
+  - [systemctl, enable, harbor.service]
+  - [bash, -c, "echo \"harbor-infra bootstrap finished at $(date -Is)\" > /opt/harbor/.bootstrapped"]

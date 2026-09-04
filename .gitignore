@@ -65,6 +65,8 @@ local/polaris/
 terraform/platform/infra/cloudkitty-infra/.ssh/
 # prometheus-infra（cloudkitty-infra から分離した Prometheus 基盤）
 terraform/platform/infra/prometheus-infra/.ssh/
+# harbor-infra（Harbor VM）の SSH 秘密鍵
+terraform/platform/infra/harbor-infra/.ssh/
 local/gcp-devstack/windows-autostop/config.env
 local/gcp-devstack/windows-autostop/*.vbs
 local/.secrets
