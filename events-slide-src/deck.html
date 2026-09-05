@@ -1,0 +1,1351 @@
+<title>LC-Cloud Kickoff</title>
+<meta name="description" content="LC-Cloud合宿の全体講習スライド。LinuxClubの勉強会資料と同じ見た目で、予備知識ゼロでも読めるように作っています。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --bg:#ffffff;
+    --ink:#1a1a1a;
+    --ink-dim:#444444;
+    --ink-faint:#8a8a8a;
+    --blue:#2265a9;
+    --blue-light:#68a3d0;
+    --blue-soft:#eaf0fa;
+    --line:#e3e3e5;
+    --surface:#f6f7f8;
+    --chip:#66696e;
+    --chip-ink:#ffffff;
+    --good:#2f9e44;
+    --warn:#c9762b;
+    --bad:#c0392b;
+    --tier-platform:#c0392b;
+    --tier-catalog:#b5860b;
+    --tier-workspace:#2f8f57;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Noto Sans JP","Hiragino Sans",sans-serif;
+  }
+  #s1{
+    background:
+      radial-gradient(ellipse 1100px 620px at 14% -10%, rgba(104,163,208,.18), transparent 60%),
+      radial-gradient(ellipse 900px 520px at 104% 8%, rgba(34,101,169,.10), transparent 55%);
+  }
+  .corner-logo{
+    position:fixed; bottom:14px; right:20px; z-index:5;
+    height:44px; width:auto; opacity:.92; pointer-events:none;
+  }
+  .mono{font-family:"IBM Plex Mono","SFMono-Regular",monospace;}
+  h1,h2,h3{
+    font-family:"Noto Sans JP",sans-serif;
+    font-weight:700;
+    color:var(--blue);
+    text-wrap:balance;
+    line-height:1.3;
+    margin:0;
+  }
+  .tnum{font-variant-numeric:tabular-nums;}
+  a{color:var(--blue);}
+
+  .deck{
+    position:relative; z-index:1;
+    height:100dvh; overflow-y:auto; overflow-x:hidden;
+    scroll-snap-type:y mandatory; scroll-behavior:smooth;
+  }
+  @media (prefers-reduced-motion:reduce){ .deck{scroll-behavior:auto;} }
+
+  .slide{
+    scroll-snap-align:start; scroll-snap-stop:always;
+    min-height:100dvh;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:clamp(28px,5.5vw,84px) clamp(24px,7.5vw,130px);
+    gap:clamp(14px,2.2vw,24px);
+    position:relative; border-bottom:1px solid var(--line);
+  }
+
+  .kicker{
+    font-size:13px; color:var(--ink-faint); letter-spacing:.04em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .kicker::before{content:""; width:16px; height:3px; background:var(--blue); flex:none;}
+
+  .brand-lockup{display:flex; align-items:center; gap:12px;}
+  .brand-lockup img{height:40px; width:auto; flex:none;}
+  .brand-lockup .word{font-family:"Noto Sans JP",sans-serif; font-weight:700; font-size:15px; color:var(--blue); letter-spacing:.04em;}
+  .brand-lockup .word small{display:block; font-weight:400; font-size:10.5px; color:var(--ink-faint); letter-spacing:.08em;}
+
+  .lede{font-size:clamp(15px,1.5vw,18.5px); color:var(--ink-dim); max-width:70ch; line-height:1.75;}
+  h2.section-h{font-size:clamp(26px,3.2vw,40px);}
+
+  .rail{
+    position:fixed; right:12px; top:50%; transform:translateY(-50%);
+    z-index:5; display:flex; flex-direction:column; gap:5px; align-items:center; max-height:82vh; overflow:hidden;
+  }
+  .rail button{
+    width:5px; height:5px; border-radius:50%; flex:none; border:1px solid #c7c9cc; background:transparent;
+    padding:0; cursor:pointer; transition:transform .15s ease, background .15s ease;
+  }
+  .rail button:hover{transform:scale(1.4);}
+  .rail button[aria-current="true"]{background:var(--blue); border-color:var(--blue); transform:scale(1.6);}
+  .rail button:focus-visible{outline:2px solid var(--blue); outline-offset:3px;}
+
+  .counter{position:fixed; left:20px; bottom:16px; z-index:5; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-faint);}
+  .counter b{color:var(--ink);}
+  .hint{position:fixed; left:20px; top:16px; z-index:5; font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-faint);}
+  .topbar{position:fixed; top:0; left:0; right:0; height:2px; z-index:6; background:var(--line);}
+  .topbar > i{display:block; height:100%; width:0%; background:var(--blue); transition:width .3s ease;}
+
+  /* ---- Divider ---- */
+  .divider{align-items:flex-start; gap:22px;}
+  .divider .num{font-size:clamp(60px,9vw,130px); font-weight:900; color:var(--blue-soft); -webkit-text-stroke:2px var(--blue); color:transparent; line-height:1;}
+  .divider h2{font-size:clamp(30px,4vw,54px);}
+  .divider ul{margin:6px 0 0; padding-left:20px; color:var(--ink-dim); font-size:15px; display:flex; flex-direction:column; gap:6px;}
+
+  /* ---- Agenda (目次) ---- */
+  .agenda{display:grid; grid-template-columns:1fr 1fr; gap:0 48px; max-width:1180px;}
+  .agenda ol{list-style:none; margin:0; padding:0; counter-reset:item;}
+  .agenda > ol{display:flex; flex-direction:column; gap:16px;}
+  .agenda li.top{font-size:17px; font-weight:700;}
+  .agenda li.top .n{color:var(--blue); margin-right:6px;}
+  .agenda li.top ul{list-style:none; margin:6px 0 0; padding-left:22px; display:flex; flex-direction:column; gap:4px;}
+  .agenda li.top ul li{font-size:13.5px; font-weight:400; color:var(--ink-dim);}
+  .agenda li.top ul li::before{content:"- "; color:var(--ink-faint);}
+
+  /* ---- generic bordered box ---- */
+  .box{border:1px solid var(--line); border-radius:6px; background:var(--surface);}
+
+  /* ---- chips (メリット/デメリット style) ---- */
+  .chip{display:inline-block; background:var(--chip); color:var(--chip-ink); font-weight:700; font-size:14px; padding:6px 16px; border-radius:6px;}
+  .chip.good{background:var(--good);}
+  .chip.warn{background:var(--warn);}
+  .tradeoff{display:grid; grid-template-columns:1fr 1fr; gap:28px; max-width:980px;}
+  .tradeoff .col{display:flex; flex-direction:column; gap:12px;}
+  .tradeoff ul{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px; font-size:14.5px; line-height:1.55;}
+  .tradeoff b{font-weight:700;}
+
+  /* ---- logo-intro (Dockerってなんだ？ style) ---- */
+  .logo-intro{align-items:flex-start; gap:20px;}
+  .logo-wrap{width:100%; display:flex; justify-content:center; padding:6px 0 2px;}
+  .logo-wrap svg{width:88px; height:88px;}
+  .logo-intro p.def{font-size:16px; line-height:1.9; max-width:74ch; color:var(--ink);}
+  .logo-intro .cite{font-size:12.5px; color:var(--ink-faint);}
+  .logo-intro .cite a{text-decoration:underline;}
+
+  /* ---- concept tiles ---- */
+  .concepts{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; max-width:1040px;}
+  .concept{padding:16px 18px;}
+  .concept .ic{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .concept .ic svg{width:22px; height:22px; flex:none;}
+  .concept h4{font-size:16px; margin:0; font-weight:700; color:var(--ink);}
+  .concept p{margin:0; font-size:13.5px; color:var(--ink-dim); line-height:1.6;}
+  .analogy{font-size:13.5px; color:var(--ink-faint); max-width:70ch; border-left:3px solid var(--line); padding-left:12px;}
+  .analogy b{color:var(--ink-dim); font-weight:700;}
+
+  pre.code{background:#1e1e1e; color:#d4d4d4; border-radius:6px; padding:16px 20px; font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.7; overflow-x:auto; max-width:660px; margin:0;}
+  pre.code .k{color:#569cd6;} pre.code .s{color:#ce9178;}
+
+  .flowline{font-family:"IBM Plex Mono",monospace; font-size:14px; color:var(--ink-dim); display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .flowline b{color:var(--ink); font-weight:600;}
+
+  /* ---- schedule ---- */
+  .days{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:1120px;}
+  .day{padding:16px 18px;}
+  .day h3{font-size:clamp(20px,2.2vw,26px);}
+  .day .tag{color:var(--ink-dim); font-size:12.5px; margin:3px 0 12px; font-weight:500;}
+  .day ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column;}
+  .day li{display:grid; grid-template-columns:84px 1fr; gap:8px; padding:5px 0; border-top:1px solid var(--line); font-size:12.5px;}
+  .day li:first-child{border-top:none;}
+  .day li time{color:var(--ink-faint);}
+  .foot-note{font-size:12px; color:var(--ink-faint); max-width:66ch;}
+
+  /* ---- cautions ---- */
+  .rules{display:flex; flex-direction:column; gap:9px; max-width:760px;}
+  .rule{display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start; padding:12px 16px;}
+  .rule .n{font-family:"IBM Plex Mono",monospace; color:var(--ink-faint); font-size:12.5px; padding-top:2px;}
+  .rule.strong{background:#fdf1ea;}
+  .rule.strong .n{color:var(--bad);}
+  .rule p{margin:0; font-size:14.5px;}
+  .rule b{font-weight:700;}
+
+  /* ---- stack grid ---- */
+  .stack-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; max-width:1100px;}
+  .tile{padding:16px 14px; display:flex; flex-direction:column; gap:5px; min-height:96px; justify-content:flex-end;}
+  .tile .k{font-size:11px; letter-spacing:.04em; color:var(--ink-faint);}
+  .tile .v{font-size:18px; font-weight:700; color:var(--ink);}
+  .tile .d{font-size:11px; color:var(--ink-dim); line-height:1.4;}
+
+  /* ---- term glossary ---- */
+  .term-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; max-width:1080px;}
+  .term-card{padding:12px 14px;}
+  .term-name{font-weight:700; color:var(--blue); font-size:13.5px; display:block; margin-bottom:3px;}
+  .term-def{font-size:12.5px; color:var(--ink-dim); line-height:1.5; margin:0;}
+
+  /* ---- tiers ---- */
+  .tiers{display:flex; flex-direction:column; gap:8px; max-width:900px;}
+  .tier{display:grid; grid-template-columns:150px 1fr 1.4fr; gap:16px; align-items:center; padding:12px 16px; border-left:4px solid var(--c);}
+  .tier .name{font-weight:700; color:var(--c);}
+  .tier .who{font-size:13px; color:var(--ink-dim);}
+  .tier .what{font-size:13px;}
+  .stat-line{font-size:14px; color:var(--ink-dim); max-width:70ch;}
+
+  /* ---- quote ---- */
+  .quote-wrap{max-width:760px;}
+  blockquote{margin:0; font-size:clamp(18px,2.2vw,25px); line-height:1.5; font-weight:500; color:var(--ink); border-left:4px solid var(--blue); padding-left:20px;}
+  cite{display:block; margin-top:12px; font-style:normal; font-size:12px; color:var(--ink-faint); font-family:"IBM Plex Mono",monospace;}
+  .riddle-q{font-size:clamp(20px,2.6vw,32px); font-weight:700; margin-top:6px; color:var(--blue);}
+
+  /* ---- steps ---- */
+  .steps{display:flex; flex-direction:column; gap:3px; max-width:640px;}
+  .step{display:grid; grid-template-columns:70px 1fr auto; gap:10px; align-items:center; padding:6px 10px; border-radius:4px; font-size:13px;}
+  .step .p{font-family:"IBM Plex Mono",monospace; color:var(--ink-faint); font-size:11px;}
+  .pill{font-size:11px; padding:2px 9px; border-radius:999px; font-weight:600;}
+  .pill.done{color:var(--good); border:1px solid var(--good);}
+  .pill.pending{color:var(--ink-faint); border:1px solid var(--ink-faint);}
+
+  /* ---- ledger ---- */
+  .ledger{display:flex; flex-direction:column; gap:2px; max-width:840px;}
+  .ledger-item{display:grid; grid-template-columns:22px 1fr; gap:12px; padding:9px 4px; border-top:1px solid var(--line); align-items:baseline;}
+  .ledger-item:first-child{border-top:none;}
+  .ledger-item .check{color:var(--good); font-weight:700;}
+  .ledger-item .name{font-weight:700; font-size:14px;}
+  .ledger-item .detail{display:block; font-size:12.5px; color:var(--ink-dim); font-weight:400; margin-top:2px;}
+
+  /* ---- requirements ---- */
+  .req-cols{display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:920px;}
+  .req-col{padding:16px 18px;}
+  .req-col ul{margin:10px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:8px; font-size:13.5px; line-height:1.4;}
+  .req-note{font-size:12.5px; color:var(--ink-faint); max-width:70ch;}
+
+  /* ---- diagram ---- */
+  figure{margin:0; display:flex; flex-direction:column; gap:10px; max-width:1000px;}
+  figure svg.flow{width:100%; height:auto;}
+  figcaption{font-size:12.5px; color:var(--ink-dim); max-width:74ch;}
+  .goal-line{font-size:clamp(16px,1.9vw,21px); font-weight:600; max-width:74ch; color:var(--ink);}
+
+  /* ---- research ---- */
+  .research-list{display:flex; flex-direction:column; gap:2px; max-width:840px;}
+  .research-item{display:grid; grid-template-columns:200px 1fr; gap:14px; padding:11px 4px; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px;}
+  .research-item:first-child{border-top:none;}
+  .research-item .src{font-weight:700; font-size:13px;}
+  .research-item .use{color:var(--ink-dim);}
+
+  .closing-list{display:flex; flex-direction:column; gap:9px; max-width:60ch;}
+  .closing-list li{font-size:15.5px; color:var(--ink-dim); list-style:none;}
+  .closing-list li::before{content:"\2014 "; color:var(--blue);}
+
+  .mermaid{max-width:980px;}
+  /* Text legibility is guaranteed independent of mermaid's internal class
+     names/version: force every rendered SVG text node dark, and give edge
+     labels an opaque white backing so text crossing a line stays readable. */
+  .mermaid svg text{ fill:#1a1a1a !important; }
+  .mermaid svg .edgeLabel{ background-color:#ffffff !important; }
+  .mermaid svg .edgeLabel rect{ fill:#ffffff !important; opacity:1 !important; }
+
+  table.api-table{width:100%; max-width:820px; border-collapse:collapse; font-size:13.5px;}
+  table.api-table th{text-align:left; font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.04em; color:var(--ink-faint); text-transform:uppercase; padding:6px 10px; border-bottom:2px solid var(--ink);}
+  table.api-table td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.api-table td.m{font-family:"IBM Plex Mono",monospace; font-weight:700; color:var(--blue); white-space:nowrap;}
+
+  .db-pair{display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; max-width:900px;}
+  .db-window{border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#ffffff; box-shadow:0 1px 2px rgba(20,30,45,.06);}
+  .db-window .bar{background:var(--surface); padding:8px 14px; font-size:11.5px; color:var(--ink-dim); border-bottom:1px solid var(--line); font-family:"IBM Plex Mono",monospace;}
+  .db-window table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .db-window th{text-align:left; padding:7px 12px; background:#fafbfc; border-bottom:1px solid var(--line); font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-faint); letter-spacing:.03em;}
+  .db-window td{padding:7px 12px; border-bottom:1px solid var(--line); font-family:"IBM Plex Mono",monospace;}
+  .db-window tr:last-child td{border-bottom:none;}
+  .db-window tr.new td{background:#e6f6ea;}
+  .db-window .new-badge{display:inline-block; margin-left:8px; font-family:"Noto Sans JP",sans-serif; font-size:9.5px; font-weight:700; color:#fff; background:var(--good); padding:1px 6px; border-radius:999px; vertical-align:middle;}
+  .db-arrow{font-size:22px; color:var(--good); font-weight:700; text-align:center; white-space:nowrap;}
+  .db-arrow .lbl{display:block; font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-dim); font-weight:400; margin-top:2px;}
+
+  @media (max-width:860px){
+    .days{grid-template-columns:1fr;}
+    .stack-grid{grid-template-columns:repeat(2,1fr);}
+    .req-cols, .tradeoff, .agenda{grid-template-columns:1fr;}
+    .tier{grid-template-columns:1fr; gap:4px;}
+    .research-item{grid-template-columns:1fr;}
+    .rail{display:none;}
+  }
+</style>
+
+<img class="corner-logo" src="data:image/png;base64,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" alt="LinuxClub">
+<div class="topbar" aria-hidden="true"><i id="progress"></i></div>
+<div class="hint mono">↑↓ / ←→</div>
+<div class="counter mono"><b id="cur">01</b> / <span id="tot">67</span></div>
+<nav class="rail" id="rail" aria-label="スライド一覧"></nav>
+
+<main class="deck" id="deck">
+
+<!-- ============ TITLE ============ -->
+<section class="slide" id="s1">
+  <div class="brand-lockup">
+    <img src="data:image/png;base64,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" alt="LinuxClub ロゴ">
+    <span class="word">LinuxClub<small>東京工科大学 技術系サークル</small></span>
+  </div>
+  <p class="kicker">LC-Cloud 合宿 — 全体講習</p>
+  <h1 style="font-size:clamp(36px,6vw,80px)">ようこそ、LC-Cloudの合宿へ</h1>
+  <p class="lede">3日間、大阪でLC-Cloudのハンズオン合宿をやります。今日の1コマは、Day2からのグループ開発に向けた仕込みです。前提知識がゼロでも置いていかれないように作ってあるので、気楽に読み進めてください。</p>
+</section>
+
+<!-- ============ AGENDA ============ -->
+<section class="slide" id="s2">
+  <h2 class="section-h">目次</h2>
+  <div class="agenda">
+    <ol>
+      <li class="top"><span class="n">1.</span>オープニング
+        <ul><li>合宿の趣旨とゴール</li><li>会期の流れ・注意事項</li></ul></li>
+      <li class="top"><span class="n">2.</span>LC-Cloudとは
+        <ul><li>なぜ自分たちで作るのか</li></ul></li>
+      <li class="top"><span class="n">3.</span>基礎知識
+        <ul><li>クラウド・VM／API／フロントエンド・バックエンド・DB／IaCとは</li></ul></li>
+      <li class="top"><span class="n">4.</span>LC-Cloudのスタック
+        <ul><li>OpenStack・Kubernetes・Authentik・Harbor</li></ul></li>
+      <li class="top"><span class="n">5.</span>Terraform入門
+        <ul><li>宣言的・State・Plan/Apply・モジュール</li></ul></li>
+    </ol>
+    <ol>
+      <li class="top"><span class="n">6.</span>認証の仕組み
+        <ul><li>IdP・OIDC・JWT／ログインの流れ</li></ul></li>
+      <li class="top"><span class="n">7.</span>LC-Cloudの全体像
+        <ul><li>3層アクセスモデル・実装フェーズ</li></ul></li>
+      <li class="top"><span class="n">8.</span>今回のお題
+        <ul><li>Middleware API（構築済み）とみんなが作るUI</li></ul></li>
+      <li class="top"><span class="n">9.</span>どこから調べるか</li>
+      <li class="top"><span class="n">10.</span>おわりに</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ SECTION 1: オープニング ============ -->
+<section class="slide divider" id="s3">
+  <span class="num">01</span>
+  <h2>オープニング</h2>
+  <p class="lede">ゴール: 今日は何を持ち帰るのかを、先にはっきりさせておく</p>
+  <ul><li>合宿の趣旨とゴール</li><li>会期の流れ</li><li>注意事項</li></ul>
+</section>
+
+<section class="slide" id="s4">
+  <p class="kicker">01. オープニング</p>
+  <h2 class="section-h">今日のゴール</h2>
+  <p class="lede">この講習だけで、いきなり実装できるようにはなりません。むしろそれでいいので、今日のゴールは2つだけに絞ります。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>① 言葉を知る</h4><p>OpenStack・Terraform・OIDCなど、この先何度も出てくる単語をひと通り拾っておきます。意味さえつかめば、あとは自分で調べて深掘りできます。</p></div>
+    <div class="concept box"><h4>② 全体像を知る</h4><p>「今回のグループ開発で何を作るのか」「そのために何を調べればいいのか」という地図を先に持っておけば、明日からの作業で迷いません。</p></div>
+  </div>
+  <p class="lede">この2つを持ち帰れれば、今日は十分です。細かい実装や手を動かす作業は、明日からのグループ開発でじっくりどうぞ。</p>
+</section>
+
+<section class="slide" id="s5">
+  <p class="kicker">01. オープニング</p>
+  <h2 class="section-h">3日間のタイムテーブル</h2>
+  <div class="days">
+    <div class="day box">
+      <h3>DAY 1</h3><p class="tag">移動 &amp; オンボーディング</p>
+      <ol class="mono">
+        <li><time class="tnum">09:00</time><span>羽田空港 集合</span></li>
+        <li><time class="tnum">10:30</time><span>羽田発 JAL113</span></li>
+        <li><time class="tnum">11:35</time><span>伊丹着</span></li>
+        <li><time class="tnum">13:00</time><span>ホテル着</span></li>
+        <li><time class="tnum">14:30-15:30</time><span>オンボーディング</span></li>
+        <li><time class="tnum">15:30-18:00</time><span>全体講習</span></li>
+        <li><time class="tnum">20:00</time><span>ホテル集合</span></li>
+        <li><time class="tnum">20:00-22:00</time><span>レク+グループレク</span></li>
+      </ol>
+    </div>
+    <div class="day box">
+      <h3>DAY 2</h3><p class="tag">グループ開発 集中日</p>
+      <ol class="mono">
+        <li><time class="tnum">09:00-09:30</time><span>朝会</span></li>
+        <li><time class="tnum">09:30-12:00</time><span>グループ開発１</span></li>
+        <li><time class="tnum">12:30-15:00</time><span>グループ開発２</span></li>
+        <li><time class="tnum">15:00-16:00</time><span>ミニレビュー</span></li>
+        <li><time class="tnum">16:00-18:00</time><span>グループ開発３</span></li>
+        <li><time class="tnum">19:30</time><span>ホテル集合</span></li>
+        <li><time class="tnum">20:00-21:30</time><span>中間発表</span></li>
+        <li><time class="tnum">21:30-</time><span>グループ開発４</span></li>
+      </ol>
+    </div>
+    <div class="day box">
+      <h3>DAY 3</h3><p class="tag">仕上げ &amp; 成果発表</p>
+      <ol class="mono">
+        <li><time class="tnum">08:30-09:00</time><span>朝会</span></li>
+        <li><time class="tnum">09:00-10:30</time><span>グループ開発５</span></li>
+        <li><time class="tnum">10:30-11:30</time><span>成果発表</span></li>
+        <li><time class="tnum">12:00頃</time><span>解散・自由行動</span></li>
+        <li><time class="tnum">17:00</time><span>伊丹空港集合</span></li>
+        <li><time class="tnum">18:25</time><span>伊丹発 JAL130</span></li>
+        <li><time class="tnum">19:40</time><span>羽田着</span></li>
+      </ol>
+    </div>
+  </div>
+  <p class="foot-note">※ 昼食はグループごとにケータリングあり。夕食はDay1は各自、Day2はグループごとに取ります。</p>
+</section>
+
+<section class="slide" id="s6">
+  <p class="kicker">01. オープニング</p>
+  <h2 class="section-h">注意事項</h2>
+  <div class="rules">
+    <div class="rule box"><span class="n mono">01</span><p>飲酒は禁止です。特に<b>未成年飲酒は厳禁</b>です。</p></div>
+    <div class="rule box"><span class="n mono">02</span><p>タイトルの通り<b>開発が主な目的</b>です。</p></div>
+    <div class="rule box"><span class="n mono">03</span><p>体調管理は<b>各自の裁量</b>でお願いします。</p></div>
+    <div class="rule box"><span class="n mono">04</span><p><b>時間厳守</b>でお願いします。25人を1人で引率しているので、集合時間には配慮をお願いします。</p></div>
+    <div class="rule box"><span class="n mono">05</span><p>自由時間に夜間外出する際は、<b>行き先・帰宅予定時刻を伝えて許可を得てから</b>出てください。</p></div>
+  </div>
+</section>
+
+<!-- ============ SECTION 2: LC-Cloudとは ============ -->
+<section class="slide divider" id="s7">
+  <span class="num">02</span>
+  <h2>LC-Cloudとは</h2>
+  <p class="lede">ゴール: LC-Cloudが「何のために・なぜ自分たちで」作られているか説明できるようになる</p>
+  <ul><li>LC-Cloudって何？</li><li>なぜ自分たちで作るのか</li></ul>
+</section>
+
+<section class="slide" id="s8">
+  <p class="kicker">02. LC-Cloudとは</p>
+  <h2 class="section-h">そもそも、LC-Cloudって何？</h2>
+  <p class="lede">LinuxClub（サークル）が自分たちで運営している、プライベートなクラウド基盤です。サークルのサービスやメンバーのプロジェクトを動かすための「土地」だと思ってください。この基盤自体も、誰かが手作業で設定しているのではなく、<b>このリポジトリのコード（Terraform）で管理されています。</b>AWSやGCPのような既製のクラウドを借りるのではなく、サークル自身がインフラを持っているからこそ、その中身をコードごと覗いて学ぶことができます。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>Authentik</h4><p>誰が入会していて、どのチームに所属しているかを管理するIdP。入会フォームの送信からアカウント発行まで、この仕組みの上で動いています。</p></div>
+    <div class="concept box"><h4>GitHub</h4><p>サークルのOrganization・チーム構成・誰が何を承認できるかを管理。すべての変更はPull Requestを通ります。</p></div>
+    <div class="concept box"><h4>Harbor</h4><p>各プロジェクトが使うコンテナイメージを保管する倉庫。脆弱性スキャンも自動で行われます。</p></div>
+    <div class="concept box"><h4>OpenStack</h4><p>VM・ネットワーク・ストレージなど、実際にプログラムが動く場所そのものを提供します。</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s9">
+  <p class="kicker">02. LC-Cloudとは</p>
+  <h2 class="section-h">なぜ自分たちでクラウドを作るのか</h2>
+  <div class="concepts">
+    <div class="concept box"><h4>サービスを動かす基盤が要る</h4><p>サークル運営のWebサービスやツールは、誰かのPCの中ではなく、いつでも動き続ける場所が必要です。その置き場所を、他社のクラウドに頼らず自分たちで持っています。</p></div>
+    <div class="concept box"><h4>本物の運用経験を積める</h4><p>権限管理・コスト管理・障害対応まで含めて自分たちで設計・運用することで、教科書には載っていない「実際の現場で起きること」を体験できます。</p></div>
+    <div class="concept box"><h4>すべてコードで残る</h4><p>設定や手順を誰か一人の頭の中に頼ると、その人がいなくなった瞬間に運用が止まります。Gitに残すことで、誰でも経緯を追える状態を保っています。</p></div>
+  </div>
+  <p class="lede">つまりLC-Cloudは、サークル運営のためであると同時に、みなさんにとっての「本物のインフラに触れる練習場」でもあります。</p>
+</section>
+
+<!-- ============ SECTION 3: 基礎知識 ============ -->
+<section class="slide divider" id="s10">
+  <span class="num">03</span>
+  <h2>基礎知識</h2>
+  <p class="lede">ゴール: クラウド・API・アプリの構造・IaCという前提知識を、自分の言葉で説明できるようになる</p>
+  <ul><li>クラウド・VMとは</li><li>APIとは</li><li>フロントエンド・バックエンド・DBとは</li><li>IaCとは</li></ul>
+</section>
+
+<section class="slide" id="s11">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">クラウド・仮想マシンの基礎</h2>
+  <p class="lede">1台の物理サーバーを、ソフトウェアの力で複数台の「仮想的なコンピュータ」に分割して使うのが基本アイデアです。この「分割して貸し出す」仕組みがあるからこそ、1台の物理マシンを何十人ものユーザーで無駄なく共有できます。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>物理サーバー</h4><p>実際に存在する1台のコンピュータ。CPU・メモリ・ディスクを持つ</p></div>
+    <div class="concept box"><h4>ハイパーバイザー</h4><p>物理サーバーの中身を複数のVMに切り分けるソフトウェア</p></div>
+    <div class="concept box"><h4>VM（仮想マシン）</h4><p>切り分けられた1つ1つの「仮想的なコンピュータ」。普通のPCのように使える</p></div>
+  </div>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+flowchart TD
+    S["物理サーバー<br/>CPU・メモリ・ディスク"] --> H["ハイパーバイザー"]
+    H --> V1["VM 1"]
+    H --> V2["VM 2"]
+    H --> V3["VM 3"]
+  </pre>
+  <p class="analogy"><b>たとえるなら:</b> 1棟のビル（物理サーバー）を、管理会社（ハイパーバイザー）がオフィス区画（VM）に分けて貸し出しているイメージです。OpenStackは、この「貸し出し」を管理する仕組みです。</p>
+</section>
+
+<section class="slide" id="s12">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">APIの基礎</h2>
+  <p class="lede">API（Application Programming Interface）は、あるプログラムが別のプログラムの機能を、決まった形式で呼び出すための「窓口」です。今回みなさんが作るのは、まさに「APIを叩いてVMを操作するUI」です。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>リクエスト</h4><p>「VMを起動して」のように、こちらから送る要求。何をしてほしいかを決まった形式で伝えます。</p></div>
+    <div class="concept box"><h4>エンドポイント</h4><p>リクエストの送り先となるURL。機能ごとに別々のエンドポイントが用意されているのが普通です。</p></div>
+    <div class="concept box"><h4>レスポンス</h4><p>結果として返ってくるデータ。多くはJSON形式で、成功したか・何が起きたかが書かれています。</p></div>
+  </div>
+  <p class="analogy"><b>料理店で考えると:</b> メニュー（決まったAPI）を指して注文すると、厨房（サーバー側）が作って皿（レスポンス）を返してくる、という関係です。</p>
+</section>
+
+<section class="slide" id="s12b">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">HTTPメソッド：動詞を使い分ける</h2>
+  <p class="lede">Web APIの多くはHTTPという通信規格の上に成り立っています。「何をしたいか」は、URLだけでなく<b>メソッド（動詞）</b>でも表現します。</p>
+  <table class="api-table">
+    <tr><th>メソッド</th><th>意味</th><th>例</th></tr>
+    <tr><td class="m">GET</td><td>データを取得する。何も変更しない</td><td class="mono">GET /todos</td></tr>
+    <tr><td class="m">POST</td><td>新しいデータを作る</td><td class="mono">POST /todos</td></tr>
+    <tr><td class="m">PATCH</td><td>既存データの一部だけ書き換える</td><td class="mono">PATCH /todos/3</td></tr>
+    <tr><td class="m">DELETE</td><td>データを削除する</td><td class="mono">DELETE /todos/3</td></tr>
+  </table>
+  <p class="foot-note">同じURL（例: <span class="mono">/todos/3</span>）でも、メソッドが違えば意味が変わります。今回のVM操作でも、一覧の取得はGET、起動・停止の指示はPOSTになります。</p>
+</section>
+
+<section class="slide" id="s12c">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">ステータスコード：結果を数字で伝える</h2>
+  <p class="lede">レスポンスには必ず3桁の数字（ステータスコード）が付きます。中身を読まなくても、大まかな結果がこの数字だけでわかります。</p>
+  <table class="api-table">
+    <tr><th>コード</th><th>意味</th></tr>
+    <tr><td class="m">200 OK</td><td>成功（主にGET）</td></tr>
+    <tr><td class="m">201 Created</td><td>新規作成に成功した</td></tr>
+    <tr><td class="m">202 Accepted</td><td>受け付けたが、処理はこれから（非同期）</td></tr>
+    <tr><td class="m">400 Bad Request</td><td>リクエストの中身がおかしい</td></tr>
+    <tr><td class="m">401 Unauthorized</td><td>そもそも誰か分からない（未ログイン・トークン不正）</td></tr>
+    <tr><td class="m">403 Forbidden</td><td>誰かは分かるが、その操作をする権限がない</td></tr>
+    <tr><td class="m">404 Not Found</td><td>指定したURLの対象が存在しない</td></tr>
+    <tr><td class="m">500 Server Error</td><td>サーバー側の不具合</td></tr>
+  </table>
+  <p class="foot-note"><b>401と403</b>は混同しがちですが、区別しておくと後で楽になります。「JWTが無い/壊れている(401)」のか「JWTは正しいがその操作の権限がない(403)」のかで、UI側に出すエラーメッセージも変わってきます。</p>
+</section>
+
+<section class="slide" id="s12d">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">実際にAPIを叩いてみると</h2>
+  <p class="lede">抽象的な話だけだとイメージしづらいので、シンプルな例で見てみましょう。「やることリスト（todo）」を管理するAPIがあるとします。</p>
+  <pre class="code">POST /todos
+Content-Type: application/json
+
+{ "title": "資料を読む" }
+
+&#8595;
+
+201 Created
+{ "id": 42, "title": "資料を読む", "done": false }</pre>
+  <p class="foot-note"><span class="mono">エンドポイント</span>（<span class="mono">/todos</span>）・<span class="mono">メソッド</span>（POST）・<span class="mono">ボディ</span>（JSON）・<span class="mono">ステータスコード</span>（201）。この4点セットがAPIの基本文法です。今回のMiddleware APIも、対象がtodoからVMに変わるだけで、考え方はまったく同じです。</p>
+</section>
+
+<section class="slide" id="s12e">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">アプリの3層構成：フロントエンド・バックエンド・DB</h2>
+  <p class="lede">先ほどのtodoアプリを例に、実際のアプリがどんな部品でできているかを見てみましょう。多くのWebアプリは、大きく3つの部品でできています。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>フロントエンド</h4><p>ブラウザやスマホで動く画面そのもの。ボタンを押す・文字を入力する場所です</p></div>
+    <div class="concept box"><h4>バックエンド</h4><p>フロントエンドからのリクエストを受け取り、処理をするプログラム。今回作るUIが呼び出す<b>Middleware API</b>がこれにあたります</p></div>
+    <div class="concept box"><h4>データベース（DB）</h4><p>データを保存しておく場所。バックエンドが読み書きします</p></div>
+  </div>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+flowchart LR
+    F["フロントエンド<br/>（画面）"] -->|HTTPリクエスト| B["バックエンド<br/>（処理）"]
+    B -->|クエリ| D["データベース<br/>（保存）"]
+    D -->|データ| B
+    B -->|レスポンス| F
+  </pre>
+</section>
+
+<section class="slide" id="s12f">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">データが保存されるまでの流れ</h2>
+  <p class="lede">「資料を読む」というtodoを登録する例で、フロントエンドからDBまでの流れを追ってみましょう。</p>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+sequenceDiagram
+    participant F as フロントエンド
+    participant B as バックエンド
+    participant D as データベース
+
+    F->>B: POST /todos { title: "資料を読む" }
+    B->>B: 入力内容をチェック
+    B->>D: INSERT INTO todos(title) VALUES(...)
+    D->>B: 新しい行のid(42)を返す
+    B->>F: 201 Created { id:42, title:"資料を読む" }
+  </pre>
+  <p class="foot-note">今回のMiddleware APIも同じ形です。フロントエンド（みなさんが作るUI）からのリクエストを受け取り、必要ならOpenStackに指示を出し、結果を返します。</p>
+</section>
+
+<section class="slide" id="s12g">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">登録の前後で、テーブルはこう変わる</h2>
+  <p class="lede">さっきのリクエストが実行されると、データベースの中の「todosテーブル」は実際にこう変化します。図で見るとイメージしやすくなります。</p>
+  <div class="db-pair">
+    <div class="db-window">
+      <div class="bar">todos テーブル（登録前）</div>
+      <table>
+        <tr><th>id</th><th>title</th><th>done</th></tr>
+        <tr><td>1</td><td>洗濯をする</td><td>false</td></tr>
+      </table>
+    </div>
+    <div class="db-arrow">→<span class="lbl">INSERT</span></div>
+    <div class="db-window">
+      <div class="bar">todos テーブル（登録後）</div>
+      <table>
+        <tr><th>id</th><th>title</th><th>done</th></tr>
+        <tr><td>1</td><td>洗濯をする</td><td>false</td></tr>
+        <tr class="new"><td>42</td><td>資料を読む<span class="new-badge">NEW</span></td><td>false</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="foot-note">バックエンドは受け取ったリクエストを、SQLの<span class="mono">INSERT</span>文（またはORMという道具）に変換してデータベースに書き込みます。「行が1つ増える」というこの結果が、前のスライドの③④に対応します。</p>
+</section>
+
+<section class="slide" id="s13">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">Infrastructure as Code（IaC）とは</h2>
+  <p class="lede">従来はWeb画面をポチポチ操作してサーバーを作っていました。IaCは、その操作を「コード」として書き、実行することでインフラを再現できるようにする考え方です。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>レビューできる</h4><p>インフラの変更もアプリのコードと同じようにPull Requestでレビューしてからマージできるので、いきなり本番が壊れるリスクを減らせます。</p></div>
+    <div class="concept box"><h4>履歴が残る</h4><p>「いつ・誰が・何を変えたか」がGitの履歴としてそのまま残るので、後から原因を追いやすくなります。</p></div>
+    <div class="concept box"><h4>再現できる</h4><p>同じコードを実行すれば、同じ環境を何度でも作り直せます。手順書を見ながら手作業で再現する必要がありません。</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s14">
+  <p class="kicker">03. 基礎知識</p>
+  <h2 class="section-h">IaCのメリット・デメリット</h2>
+  <div class="tradeoff">
+    <div class="col"><span class="chip good">メリット</span>
+      <ul>
+        <li>変更を<b>PRでレビュー</b>できる</li>
+        <li>「いつ・誰が・何を」変えたか<b>履歴が残る</b></li>
+        <li>同じ環境を<b>何度でも再現</b>できる</li>
+      </ul>
+    </div>
+    <div class="col"><span class="chip warn">デメリット</span>
+      <ul>
+        <li>ツール自体の<b>学習コスト</b>がある</li>
+        <li>最初にコード化する<b>手間</b>がかかる</li>
+        <li>コンソールを直接触る<b>手軽さは失う</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 4: LC-Cloudのスタック ============ -->
+<section class="slide divider" id="s20">
+  <span class="num">04</span>
+  <h2>LC-Cloudのスタック</h2>
+  <p class="lede">ゴール: LC-Cloudを構成する技術の名前と役割を一致させられるようになる</p>
+  <ul><li>OpenStack</li><li>Kubernetes</li><li>Authentik</li><li>Harbor / CI-CD</li></ul>
+</section>
+
+<section class="slide" id="s21">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">全体のスタック</h2>
+  <p class="lede">LC-Cloudはこれらの要素で構成されています。次のスライド以降で、知らないものだけ順番に深掘りします。</p>
+  <div class="stack-grid">
+    <div class="tile box"><span class="k">クラウド基盤</span><span class="v">OpenStack</span><span class="d">VM・ネットワーク・ストレージ本体</span></div>
+    <div class="tile box"><span class="k">コンテナ基盤</span><span class="v">Kubernetes</span><span class="d">コンテナの配置・実行を管理</span></div>
+    <div class="tile box"><span class="k">IdP / 認証</span><span class="v">Authentik</span><span class="d">ログイン・アカウント管理（OIDC）</span></div>
+    <div class="tile box"><span class="k">レジストリ</span><span class="v">Harbor</span><span class="d">コンテナイメージの保管庫</span></div>
+    <div class="tile box"><span class="k">コスト管理</span><span class="v">CloudKitty</span><span class="d">使った分だけ計算する従量課金</span></div>
+    <div class="tile box"><span class="k">インフラ定義</span><span class="v">Terraform</span><span class="d">上記すべてをコードで管理</span></div>
+    <div class="tile box"><span class="k">CI/CD</span><span class="v">GitHub Actions</span><span class="d">PRマージで自動plan/apply</span></div>
+    <div class="tile box"><span class="k">シークレット</span><span class="v">SOPS</span><span class="d">個人情報等をGit上でも暗号化</span></div>
+  </div>
+</section>
+
+<section class="slide logo-intro" id="s22">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">OpenStackってなに？</h2>
+  <div class="logo-wrap"><svg viewBox="0 0 24 24" role="img" aria-label="OpenStackのロゴ"><title>OpenStack</title><path fill="#ED1944" d="M18.575 9.29h5.418v5.42h-5.418zM0 9.29h5.419v5.42H0zm18.575 7.827a1.207 1.207 0 0 1-1.206 1.206H6.623a1.207 1.207 0 0 1-1.205-1.206v-.858H0v5.252a2.236 2.236 0 0 0 2.229 2.23h19.53A2.237 2.237 0 0 0 24 21.512V16.26h-5.425zM21.763.258H2.233a2.236 2.236 0 0 0-2.23 2.23V7.74h5.419v-.858a1.206 1.206 0 0 1 1.205-1.206h10.746a1.206 1.206 0 0 1 1.205 1.206v.858H24V2.487A2.237 2.237 0 0 0 21.763.258Z"/></svg></div>
+  <p class="def">VM・ネットワーク・ストレージなど、クラウドの中身を管理するオープンソースソフトウェア群です。役割ごとに複数のサービスに分かれています。</p>
+  <p class="cite">参考: <a href="https://docs.openstack.org/" target="_blank" rel="noopener">docs.openstack.org</a></p>
+</section>
+
+<section class="slide" id="s23">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">OpenStackの4大サービス</h2>
+  <div class="concepts">
+    <div class="concept box"><h4>Keystone</h4><p>認証・プロジェクト管理を担当。「誰が何をしてよいか」を管理する受付</p></div>
+    <div class="concept box"><h4>Nova</h4><p>VM（仮想マシン）の作成・起動・停止を担当</p></div>
+    <div class="concept box"><h4>Neutron</h4><p>VM同士をつなぐ仮想ネットワークを担当</p></div>
+    <div class="concept box"><h4>Cinder</h4><p>VMに付けるディスク（ブロックストレージ）を担当</p></div>
+  </div>
+  <p class="lede">ここで押さえておきたいのは、<b>すべてのサービスがKeystoneに認証を確認してから動く</b>という点です。Nova・Neutron・Cinderはそれぞれ独立して動いていますが、入り口はいつも共通しています。</p>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+flowchart TD
+    K["Keystone<br/>認証・受付"] --> N["Nova<br/>VMの作成/起動/停止"]
+    K --> Ne["Neutron<br/>仮想ネットワーク"]
+    K --> C["Cinder<br/>ブロックストレージ"]
+  </pre>
+  <p class="analogy"><b>ホテルでたとえると:</b> Keystone=フロント受付、Nova=客室の管理、Neutron=廊下や配線、Cinder=貸倉庫です。</p>
+</section>
+
+<section class="slide" id="s23b">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">OpenStackでできること（今のLC-Cloud）</h2>
+  <p class="lede">OpenStack自体は非常に多機能ですが、LC-Cloudで実際に使えるのは今のところこの範囲です。</p>
+  <div class="ledger">
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">VM（Nova）<span class="detail">起動・停止・一覧・削除</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">ネットワーク（Neutron）<span class="detail">プロジェクトごとの仮想ネットワーク</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">ディスク（Cinder）<span class="detail">ボリュームの作成・アタッチ</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">イメージ（Glance）<span class="detail">OSイメージ（Ubuntu 24.04など）の参照</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">マネージドDB（Trove）<span class="detail">2026-09-05に実機導入済み</span></span></div>
+  </div>
+  <p class="foot-note"><b>まだ使えないもの:</b> プロジェクト個別のロードバランサ（Octavia）・DNSゾーン（Designate）。実機Polarisにまだサービス自体が導入されていないためで、実装フェーズ表のPhase 8・9として後回しになっています。</p>
+</section>
+
+<section class="slide" id="s23d">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">LC-Cloudのネットワーク構成</h2>
+  <p class="lede">各プロジェクトは、好き勝手に外部と通信できるわけではありません。すべての外向き通信は、共有の<b>VPC Gateway</b>を必ず経由する設計になっています。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>共有VPC Gateway</h4><p>外向き通信の唯一の出入り口。プロジェクトが独自にNATやロードバランサを作ることは禁止されています</p></div>
+    <div class="concept box"><h4>プロジェクトごとの/24</h4><p>IPアドレス帯（サブネット）はplatformが一元管理し、プロジェクトごとに自動で払い出されます</p></div>
+    <div class="concept box"><h4>Floating IP</h4><p>デフォルトのクォータは0。申請・承認を経て初めて、課金ありで使えるようになります</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s23c">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">OpenStack APIを直接叩くとこうなる</h2>
+  <p class="lede">Middleware APIが内部でやっていることを覗いてみましょう。「VMを停止する」は、Nova APIに対するこういうHTTPリクエストです。</p>
+  <pre class="code">POST /v2.1/servers/{server_id}/action
+Authorization: Bearer &lt;Application Credential&gt;
+Content-Type: application/json
+
+{ "os-stop": null }</pre>
+  <p class="lede">レスポンスは<span class="mono">202 Accepted</span>（受け付けたが処理は非同期）。実際に止まったかどうかは、続けて<span class="mono">GET /v2.1/servers/{server_id}</span>でVMの状態（status）を確認しに行きます。</p>
+</section>
+
+<section class="slide" id="s23e">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">そもそも、コンテナってなに？</h2>
+  <p class="lede">Kubernetesの話をする前に、そもそも「コンテナ」が何なのかを押さえておきます。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>アプリ＋実行環境のセット</h4><p>アプリ本体と、それが動くために必要なライブラリ・設定をひとまとめにしたもの</p></div>
+    <div class="concept box"><h4>どこでも同じように動く</h4><p>開発者のPCでも本番サーバーでも、中身が同じなら同じように動く。「自分のPCでは動いたのに」問題を防げます</p></div>
+    <div class="concept box"><h4>VMより軽い</h4><p>OS全体を持たずホストのOSカーネルを共有するため、起動が速く消費リソースも少ない</p></div>
+  </div>
+  <p class="analogy"><b>身近な例だと:</b> 貨物のコンテナと同じ発想です。中身が何であれ、規格化された箱に詰めておけば、どの船（サーバー）にも同じように積み込めます。LC-CloudではこのコンテナのイメージをHarborに保管しています。</p>
+</section>
+
+<section class="slide logo-intro" id="s24">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">Kubernetesってなに？</h2>
+  <div class="logo-wrap"><svg viewBox="0 0 24 24" role="img" aria-label="Kubernetesのロゴ"><title>Kubernetes</title><path fill="#326CE5" d="M10.204 14.35l.007.01-.999 2.413a5.171 5.171 0 0 1-2.075-2.597l2.578-.437.004.005a.44.44 0 0 1 .484.606zm-.833-2.129a.44.44 0 0 0 .173-.756l.002-.011L7.585 9.7a5.143 5.143 0 0 0-.73 3.255l2.514-.725.002-.009zm1.145-1.98a.44.44 0 0 0 .699-.337l.01-.005.15-2.62a5.144 5.144 0 0 0-3.01 1.442l2.147 1.523.004-.002zm.76 2.75l.723.349.722-.347.18-.78-.5-.623h-.804l-.5.623.179.779zm1.5-3.095a.44.44 0 0 0 .7.336l.008.003 2.134-1.513a5.188 5.188 0 0 0-2.992-1.442l.148 2.615.002.001zm10.876 5.97l-5.773 7.181a1.6 1.6 0 0 1-1.248.594l-9.261.003a1.6 1.6 0 0 1-1.247-.596l-5.776-7.18a1.583 1.583 0 0 1-.307-1.34L2.1 5.573c.108-.47.425-.864.863-1.073L11.305.513a1.606 1.606 0 0 1 1.385 0l8.345 3.985c.438.209.755.604.863 1.073l2.062 8.955c.108.47-.005.963-.308 1.34zm-3.289-2.057c-.657-.192-.933-.256-1.339-.386l-.096-.03a6.499 6.499 0 0 0-1.02-4.506l.16-.143c.01-.062.024-.206.1-.288.197-.184.444-.337.743-.522.142-.083.272-.137.414-.242l.104-.083.007-.005c.24-.191.295-.521.123-.737a.594.594 0 0 0-.348-.132.481.481 0 0 0-.398.176c-.034.026-.081.062-.111.088-.134.115-.216.229-.329.35-.246.25-.45.457-.673.607-.117.07-.207.041-.297.03-.062.041-.121.084-.18.128a6.424 6.424 0 0 0-4.166-2.003l-.012-.211a.545.545 0 0 1-.162-.258c-.022-.269.014-.558.056-.906.023-.163.061-.298.067-.475.002-.036 0-.087 0-.128l.001-.014c0-.306-.224-.555-.5-.555-.275 0-.499.249-.499.555 0 .043-.002.102-.001.142.007.177.045.312.068.475.042.348.079.637.057.905-.02.135-.098.188-.163.25l-.012.223a6.545 6.545 0 0 0-4.146 2.003l-.19-.135c-.064.004-.206.023-.303-.033-.223-.15-.427-.359-.673-.609-.113-.12-.196-.234-.33-.35-.03-.026-.077-.061-.111-.088-.239-.191-.573-.171-.744.045-.172.216-.117.545.123.736.034.027.078.065.11.089.142.105.273.158.415.242.299.184.546.337.743.522.093.099.086.192.094.282.027.026.125.112.177.159a6.465 6.465 0 0 0-.936 2.163 6.45 6.45 0 0 0-.105 2.332l-.201.059c-.036.051-.111.176-.216.216-.257.081-.545.111-.895.148-.164.013-.305.005-.479.038-.042.008-.103.024-.145.034h-.007c-.295.071-.483.342-.423.608.061.267.349.429.645.365l.129-.029c.17-.045.294-.112.448-.172.33-.118.604-.217.87-.256.112-.009.229.068.288.101l.217-.037a6.5 6.5 0 0 0 2.88 3.596l-.09.218c.033.084.069.199.044.282-.097.252-.263.517-.452.813-.091.136-.185.242-.268.399-.02.037-.045.095-.064.134-.128.275-.034.591.213.71.248.12.556-.007.69-.282v-.002c.02-.039.046-.09.062-.127.07-.162.094-.301.144-.458.132-.332.205-.68.387-.897.05-.06.13-.082.215-.105l.113-.205a6.453 6.453 0 0 0 4.609.012l.106.192c.086.028.18.042.256.155.136.232.229.507.342.84.05.156.074.295.145.457.016.037.043.09.062.129.133.276.442.402.69.282.247-.118.341-.435.213-.71-.02-.039-.045-.096-.065-.134-.083-.156-.177-.261-.268-.398-.19-.296-.346-.541-.443-.793-.04-.13.007-.21.038-.294-.018-.022-.059-.144-.083-.202a6.499 6.499 0 0 0 2.88-3.622c.064.01.176.03.213.038.075-.05.144-.114.28-.104.266.039.54.138.87.256.154.06.277.128.448.173.036.01.088.019.13.028l.009.003.007.001c.297.064.584-.098.645-.365.06-.266-.128-.537-.423-.608z"/></svg></div>
+  <p class="def">大量の「コンテナ」を、複数のサーバーにまたがって自動的に配置・再起動してくれる仕組みです。LC-CloudではNamespace単位でチームやプロジェクトにリソースを割り当てています。</p>
+  <p class="cite">参考: <a href="https://kubernetes.io/docs/" target="_blank" rel="noopener">kubernetes.io/docs</a>　／　今回作るVM操作UI自体はKubernetesを直接使いませんが、LC-Cloud全体を理解する上で欠かせないので紹介しています。</p>
+</section>
+
+<section class="slide" id="s24a">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">OpenStackとKubernetesの違い</h2>
+  <p class="lede">「どちらもクラウドっぽい何か」で混同しやすいですが、扱う単位も役割も違います。</p>
+  <table class="api-table">
+    <tr><th>項目</th><th>OpenStack</th><th>Kubernetes</th></tr>
+    <tr><td class="m">扱う単位</td><td>VM（仮想マシン）</td><td>コンテナ</td></tr>
+    <tr><td class="m">1つの重さ</td><td>OS丸ごと、重め</td><td>プロセスに近く、軽量</td></tr>
+    <tr><td class="m">向いている用途</td><td>自由度の高い長時間稼働のサーバー</td><td>素早くデプロイ・スケールしたいアプリ</td></tr>
+    <tr><td class="m">LC-Cloudでの役割</td><td>VM・ネットワーク・ディスクの基盤そのもの</td><td>その上で動くアプリの実行環境の1つ</td></tr>
+  </table>
+  <p class="foot-note">今回みなさんが作るVM操作UIは、OpenStack（Nova）を操作対象にします。KubernetesはOpenStackの「代わり」ではなく、OpenStackが提供するVMなどの上でさらに動くこともある、別レイヤーの技術です。</p>
+</section>
+
+<section class="slide" id="s24c">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">今回のクラスタの話（正直な現状）</h2>
+  <p class="lede">「LC-CloudのKubernetesクラスタ」について、正直な現状を共有しておきます。</p>
+  <div class="ledger">
+    <div class="ledger-item"><span class="check mono">!</span><span class="name">本番のLC-Cloudには、まだ専用のKubernetesクラスタがありません<span class="detail">今動いているAuthentik等のサービスは、Kubernetesではなく普通のVMで動いています</span></span></div>
+    <div class="ledger-item"><span class="check mono">&rarr;</span><span class="name">今後、LC-Cloud上に構築される予定です<span class="detail">クラスタ基盤自体はこれから用意されます</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">Terraformコードは先に用意されている<span class="detail">PVC/Secret/ConfigMapを管理するコード（modules/lc-k8s-app）は、クラスタができた瞬間に使える形ですでに書かれています</span></span></div>
+  </div>
+  <p class="foot-note">「まだ無いものを前提に、コードだけ先に用意しておく」のもIaCではよくあるやり方です。クラスタが出来上がったら、このコードを流し込むだけで使い始められます。</p>
+</section>
+
+<section class="slide logo-intro" id="s25">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">Authentikってなに？</h2>
+  <div class="logo-wrap"><svg viewBox="0 0 24 24" role="img" aria-label="Authentikのロゴ"><title>Authentik</title><path fill="#FD4B2D" d="M13.96 9.01h-.84V7.492h-1.234v3.663H5.722c.34.517.538.982.538 1.152 0 .46-1.445 3.059-3.197 3.059C.8 15.427-.745 12.8.372 10.855a3.062 3.062 0 0 1 2.691-1.606c1.04 0 1.971.915 2.557 1.755V6.577a3.773 3.773 0 0 1 3.77-3.769h10.84C22.31 2.808 24 4.5 24 6.577v10.845a3.773 3.773 0 0 1-3.77 3.769h-1.6V17.5h-7.64v3.692h-1.6a3.773 3.773 0 0 1-3.77-3.769v-3.41h12.114v-6.52h-1.59v.893h-.84v-.893H13.96v1.516Zm-9.956 1.845c-.662-.703-1.578-.544-2.209 0-2.105 2.054 1.338 5.553 3.302 1.447a5.395 5.395 0 0 0-1.093-1.447Z"/></svg></div>
+  <p class="def">LC-CloudのIdP（アカウント・ログイン管理システム）です。入会フローやパスワードリセットもここで動いており、OIDCというプロトコルで他システムに認証情報を提供します（詳しくは6章）。つまりAuthentikに一度ログインしておけば、その後ろにあるOpenStackや今回作るUIにも、同じアカウントでアクセスできるようになります。</p>
+  <p class="cite">参考: <a href="https://docs.goauthentik.io/" target="_blank" rel="noopener">docs.goauthentik.io</a></p>
+</section>
+
+<section class="slide" id="s26">
+  <p class="kicker">04. LC-Cloudのスタック</p>
+  <h2 class="section-h">Harbor / CI-CD / SOPS</h2>
+  <div class="concepts">
+    <div class="concept box"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#60B932" d="m7.006 15.751 4.256 1.876.066.805-4.388-1.934.066-.747zm.304-3.435h-.605V11.21h.381V8.95h-.381v-.649l2.118-2.073v-.146c0-.11.09-.2.2-.2.11 0 .2.09.2.2v.146l2.12 2.073v.65h-.382v2.259h.381v1.106h-.514l.27 3.313L7.17 13.9l.14-1.583zm.39-1.106h.628v-.965c0-.383.313-.696.695-.696s.696.313.696.696v.965h.628V8.95H7.7v2.26zM6.89 17.05l-.066.747 4.618 2.035-.066-.805-4.486-1.977zm.23-2.6-.066.747 4.158 1.832-.065-.805-4.026-1.774zM24 12c0 6.617-5.383 12-12 12S0 18.617 0 12 5.383 0 12 0s12 5.383 12 12zm-2.43-.715a9.682 9.682 0 0 0-.223-1.523l-9.751.332 8.801-2.828-.019-.037A9.802 9.802 0 0 0 19.23 5.59l-7.786 4.03 5.712-5.941a9.675 9.675 0 0 0-5.14-1.474c-5.371 0-9.74 4.369-9.74 9.74 0 3.38 1.73 6.362 4.35 8.11l.151-1.704 4.715 2.078.102 1.246c.14.006.28.01.422.01 4.646 0 8.54-3.27 9.507-7.63l-10.08-3.497 10.128.727"/></svg></div><h4>Harbor</h4><p>コンテナイメージを保管する倉庫。脆弱性スキャン機能付き</p></div>
+    <div class="concept box"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#2088FF" d="M10.984 13.836a.5.5 0 0 1-.353-.146l-.745-.743a.5.5 0 1 1 .706-.708l.392.391 1.181-1.18a.5.5 0 0 1 .708.707l-1.535 1.533a.504.504 0 0 1-.354.146zm9.353-.147l1.534-1.532a.5.5 0 0 0-.707-.707l-1.181 1.18-.392-.391a.5.5 0 1 0-.706.708l.746.743a.497.497 0 0 0 .706-.001zM4.527 7.452l2.557-1.585A1 1 0 0 0 7.09 4.17L4.533 2.56A1 1 0 0 0 3 3.406v3.196a1.001 1.001 0 0 0 1.527.85zM5 9c2.206 0 4-1.794 4-4S7.206 1 5 1 1 2.794 1 5s1.794 4 4 4zm9 3.5c0-1.378-1.122-2.5-2.5-2.5S9 11.122 9 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5zm9 0c0-1.378-1.122-2.5-2.5-2.5S18 11.122 18 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5z"/></svg></div><h4>GitHub Actions</h4><p>PRをマージすると自動でterraform plan/applyなどを実行するCI/CD</p></div>
+    <div class="concept box"><h4>SOPS</h4><p>個人情報などの秘密情報を、暗号化したままGitで安全に管理するツール</p></div>
+  </div>
+</section>
+
+<!-- ============ SECTION 5: Terraform入門 ============ -->
+<section class="slide divider" id="s15">
+  <span class="num">05</span>
+  <h2>Terraform入門</h2>
+  <p class="lede">ゴール: Terraformが「何を」「どうやって」管理するのかが分かる</p>
+  <ul><li>Terraformとは</li><li>宣言的・State・Plan/Apply</li><li>コード例・モジュール</li></ul>
+</section>
+
+<section class="slide logo-intro" id="s16">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">Terraformってなに？</h2>
+  <div class="logo-wrap"><svg viewBox="0 0 24 24" role="img" aria-label="Terraformのロゴ"><title>Terraform</title><path fill="#844FBA" d="M1.44 0v7.575l6.561 3.79V3.787zm21.12 4.227l-6.561 3.791v7.574l6.56-3.787zM8.72 4.23v7.575l6.561 3.787V8.018zm0 8.405v7.575L15.28 24v-7.578z"/></svg></div>
+  <p class="def">HashiCorp社が開発するIaCツールです。「こうあってほしい」という<b>結果の状態</b>を宣言的に書くと、Terraformが現実のインフラをその状態に近づけてくれます。LC-Cloudの基盤はほぼすべてこのTerraformで定義されています。たとえばOpenStackだけでなく、GitHubやAuthentikのような全く違うサービスも、同じTerraformの書き方で管理できるのが大きな強みです。</p>
+  <p class="cite">参考: <a href="https://developer.hashicorp.com/terraform" target="_blank" rel="noopener">developer.hashicorp.com/terraform</a></p>
+</section>
+
+<section class="slide" id="s16b">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">Terraformを使うと何が変わるのか</h2>
+  <p class="lede">言葉で説明するより、絵で見た方が早いです。同じ「サーバーを3台用意する」作業を、手作業とTerraformで比べてみます。</p>
+  <figure>
+    <svg viewBox="0 0 900 240" role="img" aria-label="手作業でサーバーを3台作ると設定が少しずつ食い違ってしまうが、Terraformでコードを実行すると3台とも同じ設定で作られる">
+      <defs>
+        <marker id="beforeAfterArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/>
+        </marker>
+      </defs>
+      <g font-family="Noto Sans JP, sans-serif" fill="#1a1a1a">
+        <line x1="450" y1="10" x2="450" y2="225" stroke="#e3e3e5" stroke-width="1.5"/>
+
+        <text x="225" y="24" text-anchor="middle" font-size="15" font-weight="700">Terraformを使わないと</text>
+        <polygon points="90,88 100,88 95,98" fill="#1a1a1a"/>
+        <polygon points="220,88 230,88 225,98" fill="#1a1a1a"/>
+        <polygon points="350,88 360,88 355,98" fill="#1a1a1a"/>
+        <rect x="40" y="100" width="110" height="60" rx="6" fill="#eef2f8" stroke="#1a1a1a"/>
+        <text x="95" y="135" text-anchor="middle" font-size="12">サーバーA</text>
+        <rect x="170" y="100" width="110" height="60" rx="6" fill="#fbf3e3" stroke="#1a1a1a"/>
+        <text x="225" y="135" text-anchor="middle" font-size="12">サーバーB？</text>
+        <rect x="300" y="100" width="110" height="60" rx="6" fill="#fbeceb" stroke="#1a1a1a" stroke-dasharray="4,3"/>
+        <text x="355" y="135" text-anchor="middle" font-size="12">サーバーC…？</text>
+        <text x="225" y="195" text-anchor="middle" font-size="12.5" fill="#444444">画面をポチポチ操作 → 気づかないうちに設定がバラバラに</text>
+
+        <text x="675" y="24" text-anchor="middle" font-size="15" font-weight="700">Terraformを使うと</text>
+        <rect x="640" y="45" width="70" height="50" rx="4" fill="#ffffff" stroke="#1a1a1a"/>
+        <line x1="650" y1="60" x2="700" y2="60" stroke="#1a1a1a"/>
+        <line x1="650" y1="70" x2="695" y2="70" stroke="#1a1a1a"/>
+        <line x1="650" y1="80" x2="685" y2="80" stroke="#1a1a1a"/>
+        <text x="675" y="112" text-anchor="middle" font-size="10.5" fill="#444444">コード（.tf）</text>
+
+        <line x1="675" y1="122" x2="565" y2="150" stroke="#1a1a1a" marker-end="url(#beforeAfterArrow)"/>
+        <line x1="675" y1="122" x2="675" y2="150" stroke="#1a1a1a" marker-end="url(#beforeAfterArrow)"/>
+        <line x1="675" y1="122" x2="785" y2="150" stroke="#1a1a1a" marker-end="url(#beforeAfterArrow)"/>
+
+        <rect x="510" y="150" width="110" height="50" rx="6" fill="#eaf0fa" stroke="#1e4f9c"/>
+        <text x="565" y="180" text-anchor="middle" font-size="12">サーバーA</text>
+        <rect x="620" y="150" width="110" height="50" rx="6" fill="#eaf0fa" stroke="#1e4f9c"/>
+        <text x="675" y="180" text-anchor="middle" font-size="12">サーバーB</text>
+        <rect x="730" y="150" width="110" height="50" rx="6" fill="#eaf0fa" stroke="#1e4f9c"/>
+        <text x="785" y="180" text-anchor="middle" font-size="12">サーバーC</text>
+        <text x="675" y="220" text-anchor="middle" font-size="12.5" fill="#444444">同じコードを実行 → 何度実行しても同じ構成に</text>
+      </g>
+    </svg>
+    <figcaption>左は毎回手作業で設定するため、少しずつ食い違いが生まれてしまいます（左端が点線なのは「もう何を作ったか分からない」状態を表しています）。右はTerraformのコードを実行するだけなので、誰がいつ実行しても同じ構成になります。</figcaption>
+  </figure>
+</section>
+
+<section class="slide" id="s17">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">Terraformの基本概念</h2>
+  <div class="concepts">
+    <div class="concept box"><h4>宣言的</h4><p>手順ではなく「何がある状態にしたいか」を書く</p></div>
+    <div class="concept box"><h4>State</h4><p>今の実際の状態をファイルとして記録・追跡する</p></div>
+    <div class="concept box"><h4>Plan → Apply</h4><p>差分を確認してから、実際にインフラへ反映する</p></div>
+  </div>
+  <p class="flowline">Write <span style="color:var(--blue)">→</span> <b>terraform plan</b>（差分確認） <span style="color:var(--blue)">→</span> <b>terraform apply</b>（反映）</p>
+</section>
+
+<section class="slide" id="s17b">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">Stateがあると何が嬉しいのか</h2>
+  <p class="lede">「今の状態をファイルに記録する」——言葉だけだとピンときませんよね。実際に何の役に立っているのか、図で見てみます。</p>
+  <figure>
+    <svg viewBox="0 0 900 400" role="img" aria-label="Terraformはあなたが書いたコードという理想の状態と、Stateという前回の記録を比較して差分を計算する。差分があればその部分だけを実際のインフラに反映し、終わったら最新の状態をStateに書き戻す。">
+      <defs>
+        <marker id="tfArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/>
+        </marker>
+      </defs>
+      <g font-family="Noto Sans JP, sans-serif" font-size="13" fill="#1a1a1a">
+        <rect x="30" y="20" width="230" height="70" rx="6" fill="#ffffff" stroke="#1a1a1a"/>
+        <text x="145" y="50" text-anchor="middle">あなたが書いた</text>
+        <text x="145" y="70" text-anchor="middle">コード（.tf）</text>
+
+        <rect x="640" y="20" width="230" height="70" rx="6" fill="#ffffff" stroke="#1a1a1a"/>
+        <text x="755" y="50" text-anchor="middle">State</text>
+        <text x="755" y="70" text-anchor="middle">（前回の記録）</text>
+
+        <rect x="335" y="160" width="230" height="70" rx="6" fill="#eaf0fa" stroke="#1e4f9c" stroke-width="2"/>
+        <text x="450" y="190" text-anchor="middle" fill="#1e4f9c" font-weight="700">Terraform</text>
+        <text x="450" y="210" text-anchor="middle" font-size="11">（差分を計算＝plan）</text>
+
+        <rect x="335" y="300" width="230" height="70" rx="6" fill="#ffffff" stroke="#1a1a1a"/>
+        <text x="450" y="330" text-anchor="middle">実際のインフラ</text>
+        <text x="450" y="350" text-anchor="middle">（OpenStack等）</text>
+
+        <polyline points="145,90 145,130 400,130 400,160" fill="none" stroke="#1a1a1a" marker-end="url(#tfArrow)"/>
+        <text x="270" y="124" text-anchor="middle" font-size="12">①理想の状態</text>
+
+        <polyline points="755,90 755,130 500,130 500,160" fill="none" stroke="#1a1a1a" marker-end="url(#tfArrow)"/>
+        <text x="630" y="124" text-anchor="middle" font-size="12">②前回の記録</text>
+
+        <line x1="450" y1="230" x2="450" y2="296" stroke="#1a1a1a" marker-end="url(#tfArrow)"/>
+        <text x="470" y="265" text-anchor="start" font-size="12">③差分だけapply</text>
+
+        <polyline points="565,335 620,335 620,55 636,55" fill="none" stroke="#1a1a1a" stroke-dasharray="5,4" marker-end="url(#tfArrow)"/>
+        <text x="600" y="45" text-anchor="end" font-size="12">④記録を更新</text>
+      </g>
+    </svg>
+    <figcaption>Terraformは、あなたのコード（理想の状態）と直前に記録したState（前回の状態）を比較して差分を計算します（plan）。差分があれば、その部分だけを実際のインフラに反映し（apply）、終わったら最新の状態をStateに書き戻します。だからこそ、次に実行したときも「前に何を作ったか」を覚えていられ、変わっていない部分には一切触らずに済みます。</figcaption>
+  </figure>
+</section>
+
+<section class="slide" id="s18">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">実際のコード例</h2>
+  <p class="lede">これは<span class="mono">terraform/modules/lc-vm/main.tf</span>から抜き出した、実際にVMを1台作る部分です。「名前」「フレーバー」「起動ディスク」「どのネットワークに繋ぐか」を宣言しているだけで、手順は一切書いていません。前章で見たNova（VM）・Cinder（ディスク）が、そのままコードに登場します。</p>
+  <pre class="code">resource "openstack_compute_instance_v2" "this" {
+  name            = var.name
+  flavor_id       = data.openstack_compute_flavor_v2.this.id
+  security_groups = [openstack_networking_secgroup_v2.this.name]
+
+  block_device {
+    uuid                  = openstack_blockstorage_volume_v3.root.id
+    source_type           = "volume"
+    destination_type      = "volume"
+    boot_index            = 0
+  }
+
+  network {
+    uuid = data.openstack_networking_network_v2.project.id
+  }
+}</pre>
+  <p class="foot-note">起動ディスクは<span class="mono">openstack_blockstorage_volume_v3</span>（Cinderのボリューム）として別リソースで先に作ってから紐づけています。VM本体と切り離しておくことで、後からボリュームだけ付け替えたりスナップショットを取ったりしやすくなります。</p>
+</section>
+
+<section class="slide" id="s19">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">Terraformのメリット・デメリット</h2>
+  <div class="tradeoff">
+    <div class="col"><span class="chip good">メリット</span>
+      <ul>
+        <li>コードとしてインフラを<b>レビュー</b>できる</li>
+        <li>OpenStack・GitHub・Authentikなど<b>幅広い対象</b>に対応</li>
+        <li>差分を<b>plan</b>で事前確認できる</li>
+      </ul>
+    </div>
+    <div class="col"><span class="chip warn">デメリット</span>
+      <ul>
+        <li><b>State</b>の管理に気をつかう必要がある</li>
+        <li>手作業で作った既存資源の<b>import</b>が手間</li>
+        <li>覚える構文・概念が一定量ある</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s19b">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">このリポジトリの階層構造</h2>
+  <p class="lede">LC-CloudのTerraformコードは、触っていい人の範囲に応じて4つのフォルダに分かれています。上に行くほど管理者専用、下に行くほど誰でも自由に編集できます。</p>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+flowchart TD
+    T["terraform/"] --> P["platform/ (管理者のみ)"]
+    T --> C["catalog/ (権限者がPR可)"]
+    T --> W["workspaces/ (メンバー自由)"]
+    T --> M["modules/ (共通部品・管理者提供)"]
+  </pre>
+  <p class="foot-note">IdP・GitHub Org・OpenStackのネットワーク基盤は<span class="mono">platform/</span>、チーム・プロジェクトの払い出しは<span class="mono">catalog/</span>、みなさんのVMやアプリは<span class="mono">workspaces/</span>に置かれます。変更はすべてPull Request経由で行い、フォルダごとに設定されたCODEOWNERSの承認ゲートを通過してからapplyされます。</p>
+</section>
+
+<section class="slide" id="s19c">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">フォルダごとに別々のState</h2>
+  <p class="lede">Terraformは「今の実際の状態」を<b>State</b>というファイルに記録します。LC-Cloudでは、<b>フォルダ（スタック）ごとに別々のStateを持つ</b>設計にしています。1つの巨大なStateにすべてをまとめることはしません。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>影響範囲が狭まる</h4><p>workspacesの誰か1人の変更ミスが、platform全体のStateを巻き込んで壊すことはありません。</p></div>
+    <div class="concept box"><h4>applyが速い</h4><p>1つのStateに含まれるリソース数が少ないほど、planやapplyにかかる時間も短くなります。</p></div>
+    <div class="concept box"><h4>権限と1対1になる</h4><p>「誰がこのStateをapplyできるか」を、フォルダ単位のCODEOWNERSでそのまま表現できます。</p></div>
+  </div>
+  <p class="foot-note">Stateの保存先（バックエンド）は、LC-Cloud自身の上で動くCeph RGW（S3互換のオブジェクトストレージ）です。PII（個人情報）はStateに含めない設計になっているため、State自体の暗号化は必須にしていません。</p>
+</section>
+
+<section class="slide" id="s19d">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">PRからapplyまでの流れ</h2>
+  <p class="lede">Terraformのコードを変更するときは、誰であっても手元から直接applyせず、必ずPull Requestを経由します。</p>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+sequenceDiagram
+    participant Dev as 変更した人
+    participant GH as GitHub
+    participant CI as GitHub Actions
+    participant Rev as CODEOWNERS(承認者)
+
+    Dev->>GH: ①PRを作成
+    GH->>CI: ②plan workflowを起動
+    CI->>GH: ③terraform planの結果をコメント
+    Rev->>GH: ④内容を確認して承認
+    Dev->>GH: ⑤mainにマージ
+    GH->>CI: ⑥apply workflowを起動
+    CI->>CI: ⑦terraform applyを実行
+  </pre>
+  <p class="foot-note">Application CredentialなどTerraform実行用の認証情報はGitHub Secretsに保管されており、手元のPCには一切置きません。CIだけがそれを使ってapplyします。</p>
+</section>
+
+<section class="slide" id="s19e0">
+  <p class="kicker">05. Terraform入門</p>
+  <h2 class="section-h">モジュールとは：関数のような部品</h2>
+  <p class="lede"><b>モジュール</b>とは、複数のリソースをひとまとめにして名前を付け、再利用できるようにしたものです。プログラミングでいう「関数」に近い存在だと考えてください。中身の実装を知らなくても、決まった入力（変数）を渡すだけで使えます。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>モジュール無しだと…</h4><p>VMを1台作るだけでも、ネットワーク参照・セキュリティグループ・ボリューム・インスタンス本体と、10行以上のコードを毎回書くことになります（実際に前のスライドで見た通りです）。</p></div>
+    <div class="concept box"><h4>モジュール有りだと…</h4><p><span class="mono">module "app" { source = "../../modules/lc-vm" ... }</span>のように、名前・イメージ・フレーバーなど必要な値を渡すだけで、同じ内容を数行で書けます。</p></div>
+  </div>
+  <p class="foot-note">LC-Cloudでは、こうした「よく使う部品」をあらかじめ<span class="mono">modules/</span>に用意してあります。</p>
+</section>
+
+<!-- ============ SECTION 6: 認証の仕組み ============ -->
+<section class="slide divider" id="s27">
+  <span class="num">06</span>
+  <h2>認証の仕組み</h2>
+  <p class="lede">ゴール: ログインの裏側で何が起きているかを、図を見ながら説明できるようになる</p>
+  <ul><li>IdP・OIDC・JWT</li><li>トークンの種類・スコープ</li><li>ログインの流れ</li></ul>
+</section>
+
+<section class="slide" id="s28">
+  <p class="kicker">06. 認証の仕組み</p>
+  <h2 class="section-h">IdP・OIDC・JWTってなに？</h2>
+  <p class="lede">一度のログインでいろいろなサービスを使えるようにする仕組み（SSO）の裏側にある要素です。今回作るUIも、この仕組みでログインを実装します。</p>
+  <div class="concepts">
+    <div class="concept box"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#FD4B2D" d="M13.96 9.01h-.84V7.492h-1.234v3.663H5.722c.34.517.538.982.538 1.152 0 .46-1.445 3.059-3.197 3.059C.8 15.427-.745 12.8.372 10.855a3.062 3.062 0 0 1 2.691-1.606c1.04 0 1.971.915 2.557 1.755V6.577a3.773 3.773 0 0 1 3.77-3.769h10.84C22.31 2.808 24 4.5 24 6.577v10.845a3.773 3.773 0 0 1-3.77 3.769h-1.6V17.5h-7.64v3.692h-1.6a3.773 3.773 0 0 1-3.77-3.769v-3.41h12.114v-6.52h-1.59v.893h-.84v-.893H13.96v1.516Zm-9.956 1.845c-.662-.703-1.578-.544-2.209 0-2.105 2.054 1.338 5.553 3.302 1.447a5.395 5.395 0 0 0-1.093-1.447Z"/></svg></div><h4>IdP</h4><p>Identity Provider＝ユーザーの身元を管理・認証する係。LC-CloudではAuthentikがこれ</p></div>
+    <div class="concept box"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#F78C40" d="M14.54.889l-3.63 1.773v18.17c-4.15-.52-7.27-2.78-7.27-5.5 0-2.58 2.8-4.75 6.63-5.41v-2.31C4.42 8.322 0 11.502 0 15.332c0 3.96 4.74 7.24 10.91 7.78l3.63-1.71V.888m.64 6.724v2.31c1.43.25 2.71.7 3.76 1.31l-1.97 1.11 7.03 1.53-.5-5.21-1.87 1.06c-1.74-1.06-3.96-1.81-6.45-2.11z"/></svg></div><h4>OIDC</h4><p>「このユーザーは誰？」をIdPに問い合わせるための標準プロトコル</p></div>
+    <div class="concept box"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#000000" d="M10.2 0v6.456L12 8.928l1.8-2.472V0zm3.6 6.456v3.072l2.904-.96L20.52 3.36l-2.928-2.136zm2.904 2.112l-1.8 2.496 2.928.936 6.144-1.992-1.128-3.432zM17.832 12l-2.928.936 1.8 2.496 6.144 1.992 1.128-3.432zm-1.128 3.432l-2.904-.96v3.072l3.792 5.232 2.928-2.136zM13.8 17.544L12 15.072l-1.8 2.472V24h3.6zm-3.6 0v-3.072l-2.904.96L3.48 20.64l2.928 2.136zm-2.904-2.112l1.8-2.496L6.168 12 .024 13.992l1.128 3.432zM6.168 12l2.928-.936-1.8-2.496-6.144-1.992-1.128 3.432zm1.128-3.432l2.904.96V6.456L6.408 1.224 3.48 3.36Z"/></svg></div><h4>JWT</h4><p>「認証済みですよ」を証明する、改ざんを検知できるデジタルな通行証（トークン）</p></div>
+  </div>
+  <p class="analogy"><b>感覚で言うと:</b> 受付（IdP）で学生証を確認してもらい、代わりに入館証（JWT）を受け取って建物の中で提示するイメージです。</p>
+  <p class="lede">ポイントは、<b>UIそのものはパスワードを一切扱わない</b>ということです。ログインの実処理はAuthentikに任せ、UIは「ログイン済みかどうか」の結果だけを受け取って使います（次のスライドで、LC-Cloudでの実際のやり方を見ます）。</p>
+</section>
+
+<section class="slide" id="s28a">
+  <p class="kicker">06. 認証の仕組み</p>
+  <h2 class="section-h">IDトークン と アクセストークン：一般的なOIDCの場合</h2>
+  <p class="lede">OIDCでログインすると、IdPは一般的に2種類のトークンを返します。それぞれ役割が違います（他の多くのサービスではこの形が基本です）。</p>
+  <table class="api-table">
+    <tr><th>種類</th><th>中身</th><th>使いみち</th></tr>
+    <tr><td class="m">IDトークン</td><td>「誰がログインしたか」の証明（名前・メールなど）</td><td>アプリ側で「ようこそ○○さん」と表示する用</td></tr>
+    <tr><td class="m">アクセストークン</td><td>「何をする権限があるか」の証明</td><td>APIを呼ぶときにAuthorizationヘッダーに載せる</td></tr>
+  </table>
+  <p class="foot-note">ここは一般的なOIDCの説明です。<b>LC-Cloudでは、実はこの2つのトークンをUIが直接扱うことはありません。</b>次のスライドで、実際のやり方を見ましょう。</p>
+</section>
+
+<section class="slide" id="s28b">
+  <p class="kicker">06. 認証の仕組み</p>
+  <h2 class="section-h">スコープ（scope）：何を教えてもらうか</h2>
+  <p class="lede">ログイン時にIdPへ「どんな情報がほしいか」を宣言します。これを<b>スコープ</b>と呼びます。</p>
+  <table class="api-table">
+    <tr><th>スコープ</th><th>もらえる情報</th></tr>
+    <tr><td class="m">openid</td><td>ログインしていることの証明そのもの（必須）</td></tr>
+    <tr><td class="m">profile</td><td>名前などのプロフィール情報</td></tr>
+    <tr><td class="m">email</td><td>メールアドレス</td></tr>
+  </table>
+  <pre class="code">managed_list = [
+  "goauthentik.io/providers/oauth2/scope-openid",
+  "goauthentik.io/providers/oauth2/scope-email",
+  "goauthentik.io/providers/oauth2/scope-profile",
+]</pre>
+  <p class="foot-note">LC-CloudのOIDCクライアントも、実際にTerraformでこの3つのスコープをリクエストするよう設定されています。</p>
+</section>
+
+<section class="slide" id="s29">
+  <p class="kicker">06. 認証の仕組み</p>
+  <h2 class="section-h">ログインの流れ：LC-Cloudの実際のやり方</h2>
+  <p class="lede">LC-Cloudでは、UI（あなたが作るコード）がOIDCのやりとりを自分で実装することはありません。<b>Ingress</b>と<b>Authentik Outpost</b>という2つの既存の仕組みが、ログインを丸ごと代行します。</p>
+  <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+sequenceDiagram
+    participant U as ブラウザ
+    participant I as Ingress
+    participant O as Authentikの門番<br/>(Outpost)
+    participant API as infra-api
+
+    U->>I: ①ページ/APIにアクセス
+    I->>O: ②ログイン済みか確認
+    O->>U: ③未ログインならログイン画面へ
+    U->>O: ④ID・パスワードを入力
+    Note over O,U: ログイン成功、Cookieを発行
+    U->>I: ⑤Cookie付きで再アクセス
+    I->>O: ⑥確認（今度はOK）
+    I->>API: ⑦誰かを示すヘッダー付きで転送
+    API->>U: ⑧結果を返す
+  </pre>
+  <p class="foot-note">③〜⑥はブラウザとCookieが自動でやってくれる部分で、UIのコードには一切登場しません。UIが実際に書くのは⑦以降、つまり普通に<span class="mono">fetch()</span>でAPIを呼ぶコードだけです。</p>
+</section>
+
+<!-- ============ SECTION 7: LC-Cloudの全体像 ============ -->
+<section class="slide divider" id="s30">
+  <span class="num">07</span>
+  <h2>LC-Cloudの全体像</h2>
+  <p class="lede">ゴール: 権限の分け方と、今どこまで構築が進んでいるかを把握する</p>
+  <ul><li>3層アクセスモデル</li><li>実装フェーズの進捗</li></ul>
+</section>
+
+<section class="slide" id="s31">
+  <p class="kicker">07. LC-Cloudの全体像</p>
+  <h2 class="section-h">3層のアクセスモデル</h2>
+  <p class="lede">誰が何を触れるかを3層に分離しています。権限を絞ることで、操作ミスや事故が起きたときの影響範囲を小さくするためです。</p>
+  <div class="tiers">
+    <div class="tier" style="--c:var(--tier-platform)"><span class="name">platform</span><span class="who">管理者のみ</span><span class="what">IdP・GitHub Org・OpenStackネットワーク基盤</span></div>
+    <div class="tier" style="--c:var(--tier-catalog)"><span class="name">catalog</span><span class="who">権限者（PR可）</span><span class="what">チーム・プロジェクト・請求アカウント</span></div>
+    <div class="tier" style="--c:var(--tier-workspace)"><span class="name">workspaces</span><span class="who">メンバー自由</span><span class="what">VM・DB・ストレージなど個々のリソース</span></div>
+  </div>
+  <p class="lede">たとえば新入生のみなさんは、基本的に一番下の<b>workspaces</b>層で作業します。platform層の設定を壊す心配をせずに、自分のVMやアプリを自由に触れます。</p>
+</section>
+
+<!-- ============ SECTION 8: 今回のお題 ============ -->
+<section class="slide divider" id="s33">
+  <span class="num">08</span>
+  <h2>今回のお題</h2>
+  <p class="lede">ゴール: 自分たちが何を作ればいいのかを、具体的な機能レベルで言えるようになる</p>
+  <ul><li>Middleware API（構築済み）</li><li>みんなが作るUI</li></ul>
+</section>
+
+<section class="slide" id="s34">
+  <p class="kicker">08. 今回のお題 — 寄り道クイズ</p>
+  <div class="quote-wrap">
+    <p class="lede">ここでいったん整理しましょう。LC-Cloudの設計方針では、役割分担がこう決められています。</p>
+    <blockquote>インフラの作成・削除は Terraform、VMの起動・停止・ログ取得など既存リソースへの運用操作は Middleware API が担当する。
+      <cite>— LC-Cloud 設計方針</cite>
+    </blockquote>
+    <p class="riddle-q">Middleware APIはもう用意されています。<br>では、残っているピースは何でしょう？</p>
+  </div>
+</section>
+
+<section class="slide" id="s35">
+  <p class="kicker">08. 今回のお題 — 答え</p>
+  <h2 class="section-h">残っているのは「使う人側」のUI</h2>
+  <p class="lede">Terraformでインフラを作り、Middleware APIで運用操作の窓口も用意しました。残っているのは、それを<b>人が使えるようにするクライアントUI</b>です。今回みんなに作ってもらうのは、まさにこの部分です。</p>
+  <div class="ledger">
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">Terraform<span class="detail">インフラの作成・削除を担当（構築済み）</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">Middleware API<span class="detail">VM操作の窓口を担当（構築済み）</span></span></div>
+    <div class="ledger-item"><span class="check mono">?</span><span class="name">クライアントUI<span class="detail">ログインして操作するための画面（← 今回作るもの）</span></span></div>
+  </div>
+</section>
+
+<section class="slide" id="s35a">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h">Middleware APIの役割</h2>
+  <p class="lede">「Middleware API」は実は1つのアプリではなく、役割ごとに分かれた<b>infra-api・billing-api・k8s-api</b>という3つのサービスの総称です。みなさんが使うのは主に<b>infra-api</b>（OpenStack操作）です。3章で見たバックエンドの役割を、そのまま担っています。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>① 認証はしない</h4><p>「誰か」の確認はAuthentik Outpostに完全に任せます。infra-apiは、Ingressが付けてくれたヘッダーを信じるだけです</p></div>
+    <div class="concept box"><h4>② 操作の代行</h4><p>Vaultから取り出したApplication CredentialでOpenStack（Nova等）を呼び出します</p></div>
+    <div class="concept box"><h4>③ 結果の整形</h4><p>OpenStackから返ってきた複雑なレスポンスを、UIが使いやすいシンプルなJSONに変換して返します</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s35b">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h">なぜMiddleware APIが必要なのか？</h2>
+  <p class="lede">「UIから直接OpenStackを呼べばいいのでは」と思った人もいるはずです。それをしない理由があります。</p>
+  <div class="concepts">
+    <div class="concept box"><h4>秘密情報を守る</h4><p>OpenStackを操作するApplication Credentialのような「鍵」をブラウザのJavaScriptに埋め込むと、誰でも盗み見できてしまいます。鍵はVault・サーバー側だけが持ちます</p></div>
+    <div class="concept box"><h4>認証を自分で作らない</h4><p>ログイン処理を自前実装せず、Ingressの<span class="mono">forward-auth</span>機能とAuthentikにまるごと任せることで、車輪の再発明をしていません</p></div>
+    <div class="concept box"><h4>窓口をシンプルにできる</h4><p>OpenStackの生のAPIは多機能で複雑ですが、infra-apiは「一覧」「起動」「停止」のような、必要な操作だけのシンプルな窓口を用意できます</p></div>
+  </div>
+  <p class="foot-note">この設計思想は一般的なWebアプリでも同じです。ブラウザ（フロントエンド）は秘密の鍵を持たず、バックエンドサーバーが代わりに外部サービスを呼ぶ、という形が基本です。</p>
+</section>
+
+<section class="slide" id="s36">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h">今回のプロジェクトではTerraformでこんなことやってます</h2>
+  <p class="lede">「本当にここまで動いているの？」と疑う人もいるでしょう。ここに挙げるのは、すべて実機で検証済みの実績です。</p>
+  <div class="ledger">
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">Authentik（IdP）<span class="detail">入会フロー・パスワードリセット・約70リソースを管理</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">GitHub<span class="detail">Organization・Teams・Branch Protection・CODEOWNERS</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">OpenStack platform<span class="detail">ネットワーク・イメージ・クォータ</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">catalog<span class="detail">チーム・プロジェクト作成をPRベースで自動化、実機E2E検証済み</span></span></div>
+    <div class="ledger-item"><span class="check mono">&#10003;</span><span class="name">CloudKitty<span class="detail">従量課金の単価設定をコードで管理</span></span></div>
+  </div>
+</section>
+
+<section class="slide" id="s37">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h" style="font-size:clamp(22px,2.8vw,34px)">今回作ってもらうもの：全体の流れ</h2>
+  <p class="goal-line">IdP基盤の認証をもとにinfra-apiを叩き、<b>VM操作ができるUI</b>を作ってもらいます。全体を図にすると、こうなります。</p>
+  <figure>
+    <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'darkMode':false,'background':'#ffffff','primaryColor':'#eef2f8','primaryTextColor':'#1a1a1a','primaryBorderColor':'#1a1a1a','secondaryColor':'#f6f7f8','secondaryTextColor':'#1a1a1a','secondaryBorderColor':'#1a1a1a','tertiaryColor':'#ffffff','tertiaryTextColor':'#1a1a1a','tertiaryBorderColor':'#1a1a1a','lineColor':'#1a1a1a','textColor':'#1a1a1a','mainBkg':'#eef2f8','nodeBorder':'#1a1a1a','clusterBkg':'#f6f7f8','clusterBorder':'#1a1a1a','defaultLinkColor':'#1a1a1a','titleColor':'#1a1a1a','edgeLabelBackground':'#ffffff','nodeTextColor':'#1a1a1a','actorBkg':'#eef2f8','actorBorder':'#1a1a1a','actorTextColor':'#1a1a1a','actorLineColor':'#1a1a1a','signalColor':'#1a1a1a','signalTextColor':'#1a1a1a','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#1a1a1a','labelTextColor':'#1a1a1a','loopTextColor':'#1a1a1a','noteBkgColor':'#fff8e6','noteTextColor':'#1a1a1a','noteBorderColor':'#c9762b','activationBkgColor':'#eef2f8','activationBorderColor':'#1a1a1a','sequenceNumberColor':'#1a1a1a'}}}%%
+flowchart LR
+    U["ユーザー"] -->|①アクセス<br/>Cookie自動送信| I["Ingress"]
+    I -->|②未ログインなら| A["Authentikの<br/>ログイン画面"]
+    I -->|③ / を配信| UI["★あなたが作る★<br/>SPA（フロントエンド）"]
+    I -->|④ /api/infra/* を転送<br/>+ 認証ヘッダー| M["infra-api<br/>(構築済み)"]
+    M -->|⑤Application Credential| N["OpenStack Nova"]
+    </pre>
+    <figcaption>Ingressが認証チェックと振り分けの両方を担い、「/」へのアクセスにはみなさんが作るSPA（フロントエンド）を、「/api/infra/*」へのアクセスにはすでに完成しているinfra-apiを返します。infra-apiがVaultから取り出したApplication Credentialを使ってOpenStack Novaを呼び出します。UIはOpenStack Novaに直接は触らず、必ずinfra-apiを経由します。</figcaption>
+  </figure>
+</section>
+
+<section class="slide" id="s37b">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h" style="font-size:clamp(22px,2.8vw,34px)">infra-api 利用ガイド（実際の設計より）</h2>
+  <p class="lede">これは想像ではなく、実際の設計文書に書かれているエンドポイントです。認証ヘッダーを自分で組み立てる必要はありません。</p>
+  <pre class="code">GET  /api/infra/me
+GET  /api/infra/projects/{project}/vms
+GET  /api/infra/projects/{project}/vms/{id}
+POST /api/infra/projects/{project}/vms/{id}/start
+POST /api/infra/projects/{project}/vms/{id}/stop
+GET  /api/infra/projects/{project}/vms/{id}/console</pre>
+  <p class="foot-note"><span class="mono">{project}</span>はチーム名ではなく、<b>ワークスペース名</b>（catalog/projects/の名前）です。<span class="mono">/me</span>は「自分が誰か」をヘッダーから読み取って返すだけのエンドポイントで、ログイン直後のユーザー名表示に使えます。VMのコンソールはnoVNC（ブラウザで動くVNCクライアント）をWebSocket経由で配信します。</p>
+</section>
+
+<section class="slide" id="s37c">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h" style="font-size:clamp(22px,2.8vw,34px)">実装で気をつけたいこと：セッション切れ</h2>
+  <p class="lede">Cookie認証には1つ落とし穴があります。セッションが切れると、<span class="mono">fetch()</span>は自動でログイン画面のHTMLを追いかけてしまい、<b>ステータスは200のまま中身がJSONじゃなくなります</b>。</p>
+  <pre class="code">async function apiFetch(path) {
+  const res = await fetch(path, { credentials: "same-origin" });
+  const type = res.headers.get("content-type") || "";
+
+  if (!type.includes("application/json")) {
+    // ログイン画面に飛ばされている = セッション切れ
+    location.href = "/outpost.goauthentik.io/start?rd=" + location.href;
+    return new Promise(() => {});
+  }
+  return res.json();
+}</pre>
+  <p class="foot-note"><span class="mono">response.ok</span>だけを見るコードは、この「200なのに中身が違う」ケースを見逃します。<span class="mono">Content-Type</span>まで確認するのが安全です。</p>
+</section>
+
+<section class="slide" id="s38">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h" style="font-size:clamp(22px,2.8vw,34px)">想定される機能</h2>
+  <p class="req-note">以下はゴールを噛み砕いた<b>たたき台</b>です。実際にどこまで作るかはグループで相談して決めてください。全部を完璧に作る必要はありません。まずは必須要件が動くところを目指しましょう。</p>
+  <div class="req-cols">
+    <div class="req-col box">
+      <span class="chip good">必須要件</span>
+      <ul>
+        <li>Authentikでログインできる（Ingressが自動で誘導）</li>
+        <li>ログイン中のユーザーが自分のVM一覧を見られる</li>
+        <li>VMの起動・停止操作ができる</li>
+      </ul>
+    </div>
+    <div class="req-col box">
+      <span class="chip">あるとうれしい</span>
+      <ul>
+        <li>新しいVMを作成できる</li>
+        <li>VMのログ・コンソールを見られる</li>
+        <li>誰がいつ何を操作したかの履歴を残す</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s39">
+  <p class="kicker">08. 今回のお題</p>
+  <h2 class="section-h" style="font-size:clamp(22px,2.8vw,34px)">作るときに触ることになる技術</h2>
+  <div class="ledger">
+    <div class="ledger-item"><span class="check mono">&rarr;</span><span class="name">fetch()でのAPI呼び出し<span class="detail">credentials: "same-origin"でCookieを送り、infra-apiを叩く部分</span></span></div>
+    <div class="ledger-item"><span class="check mono">&rarr;</span><span class="name">セッション切れの検知<span class="detail">Content-Typeを見て、ログイン画面に戻すハンドリング</span></span></div>
+    <div class="ledger-item"><span class="check mono">&rarr;</span><span class="name">簡単なWebフロントエンド<span class="detail">VM一覧の表示・起動/停止ボタンなど</span></span></div>
+  </div>
+</section>
+
+<!-- ============ SECTION 9: どこから調べるか ============ -->
+<section class="slide divider" id="s40">
+  <span class="num">09</span>
+  <h2>どこから調べるか</h2>
+  <p class="lede">ゴール: 分からなくなったときに、どこを見に行けばいいかを知っておく</p>
+  <ul><li>配布される利用ガイド</li><li>公式ドキュメント</li></ul>
+</section>
+
+<section class="slide" id="s41">
+  <p class="kicker">09. どこから調べるか</p>
+  <h2 class="section-h">調査の入り口</h2>
+  <p class="lede">検索するにも、まず「どこを見ればいいか」が分かっていないと時間を溶かします。優先順位の高い順に並べました。</p>
+  <div class="research-list">
+    <div class="research-item"><span class="src">① Middleware APIの利用ガイド（配布資料）</span><span class="use">当日案内される、実際に呼べるエンドポイントと認証方法。今回いちばん最初に確認すべきものです</span></div>
+    <div class="research-item"><span class="src">② <a href="https://docs.goauthentik.io/" target="_blank" rel="noopener">docs.goauthentik.io</a></span><span class="use">Authentik公式ドキュメント。OIDCの設定方法・ログインフローの詳細を確認できます</span></div>
+    <div class="research-item"><span class="src">③ <a href="https://jwt.io/" target="_blank" rel="noopener">jwt.io</a></span><span class="use">受け取ったトークンの中身をその場でデコードして確認できるデバッガ。動作確認に便利です</span></div>
+    <div class="research-item"><span class="src">④ <a href="https://docs.openstack.org/" target="_blank" rel="noopener">docs.openstack.org</a></span><span class="use">OpenStack公式ドキュメント。Nova等のAPI仕様の一次情報です</span></div>
+  </div>
+  <p class="foot-note">気になった単語やAPIは、グループ開発が始まる前に各自実際に触って確認しておいてください。読むだけより、1回動かした方が10倍記憶に残ります。</p>
+</section>
+
+<!-- ============ SECTION 10: おわりに ============ -->
+<section class="slide divider" id="s42">
+  <span class="num">10</span>
+  <h2>おわりに</h2>
+  <p class="lede">ゴール: 今日のふりかえりと、明日からのグループ開発への橋渡し</p>
+</section>
+
+<section class="slide" id="s43">
+  <p class="kicker">10. おわりに</p>
+  <h2 class="section-h">今日のふりかえり</h2>
+  <p class="lede">今日出てきた言葉を、もう一度並べておきます。グループ開発中に分からなくなったら、このページに戻ってきてください。</p>
+  <div class="term-grid">
+    <div class="term-card box"><span class="term-name">VM</span><p class="term-def">物理サーバーを分割した仮想的なコンピュータ</p></div>
+    <div class="term-card box"><span class="term-name">API</span><p class="term-def">プログラム同士が機能を呼び出し合う窓口</p></div>
+    <div class="term-card box"><span class="term-name">フロントエンド／バックエンド</span><p class="term-def">画面側のプログラムと、処理をするサーバー側のプログラム</p></div>
+    <div class="term-card box"><span class="term-name">IaC</span><p class="term-def">インフラをコードとして定義・管理する考え方</p></div>
+    <div class="term-card box"><span class="term-name">Terraform</span><p class="term-def">IaCを実践するツール。宣言→plan→apply</p></div>
+    <div class="term-card box"><span class="term-name">OpenStack</span><p class="term-def">Keystone・Nova・Neutron・Cinderからなるクラウド基盤</p></div>
+    <div class="term-card box"><span class="term-name">IdP / OIDC</span><p class="term-def">ログインを一元管理する仕組みとその標準プロトコル</p></div>
+    <div class="term-card box"><span class="term-name">IDトークン／アクセストークン</span><p class="term-def">「誰か」の証明と「何をしてよいか」の証明</p></div>
+    <div class="term-card box"><span class="term-name">Middleware API</span><p class="term-def">VM操作の窓口。すでに構築済み</p></div>
+  </div>
+  <p class="lede"><b>3行まとめ:</b> ①LC-Cloudはコード(Terraform)で管理されたプライベートクラウド。②インフラとMiddleware APIはもう用意されている。③みんなが作るのは、それを使ってログイン・VM操作できるクライアントUI。</p>
+</section>
+
+<section class="slide" id="s44">
+  <p class="kicker">さあ、はじめよう</p>
+  <h1 style="font-size:clamp(42px,7vw,100px); color:var(--blue)">Let's build.</h1>
+  <ul class="closing-list">
+    <li>質問はいつでもどうぞ</li>
+    <li>次はグループに分かれてレク、そして明日からグループ開発です</li>
+    <li>今日出てきた単語の予習が、明日のスタートダッシュを決めます</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var rail = document.getElementById('rail');
+  var progress = document.getElementById('progress');
+  var curEl = document.getElementById('cur');
+  document.getElementById('tot').textContent = String(slides.length).padStart(2,'0');
+
+  slides.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', 'スライド ' + (i+1) + ' へ移動');
+    b.addEventListener('click', function(){ goTo(i); });
+    rail.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(rail.children);
+
+  var current = 0;
+  function setActive(i){
+    current = i;
+    dots.forEach(function(d, idx){ d.setAttribute('aria-current', idx === i ? 'true' : 'false'); });
+    curEl.textContent = String(i+1).padStart(2,'0');
+    progress.style.width = (((i+1) / slides.length) * 100) + '%';
+  }
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting && e.intersectionRatio > 0.55){
+        setActive(slides.indexOf(e.target));
+      }
+    });
+  }, { root: deck, threshold: [0.55] });
+  slides.forEach(function(s){ io.observe(s); });
+
+  function goTo(i){
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    slides[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  window.addEventListener('keydown', function(e){
+    if (['ArrowDown','ArrowRight','PageDown',' '].indexOf(e.key) > -1){
+      e.preventDefault(); goTo(current + 1);
+    } else if (['ArrowUp','ArrowLeft','PageUp'].indexOf(e.key) > -1){
+      e.preventDefault(); goTo(current - 1);
+    } else if (e.key === 'Home'){
+      e.preventDefault(); goTo(0);
+    } else if (e.key === 'End'){
+      e.preventDefault(); goTo(slides.length - 1);
+    }
+  });
+
+  setActive(0);
+})();
+</script>
