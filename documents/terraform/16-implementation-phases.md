@@ -283,11 +283,11 @@ network/subnet/router interface・Application Credential が全て実際に
 
    | モジュール | 内容 |
    | --- | --- |
-   | `lc-vm` | VM + ボリューム + SG |
-   | `lc-dns-record` | DNS レコード（ゾーンを data で自動参照） |
-   | `lc-k8s-app` | K8s PVC + Secret + ConfigMap |
-   | `lc-object-bucket` | Swift コンテナ + CORS / lifecycle |
-   | `lc-db` | Trove DB インスタンス + ユーザー |
+   | `lc-vm` | VM + ボリューム + SG ✅ |
+   | `lc-dns-record` | DNS レコード（ゾーンを data で自動参照） — Designate 未導入のため Phase 8 待ちに保留 |
+   | `lc-k8s-app` | K8s PVC + Secret + ConfigMap ✅ |
+   | `lc-object-bucket` | Swift コンテナ + CORS ✅（lifecycle は Swift に該当機能が無く実装せず。`modules/lc-object-bucket/README.md` 参照） |
+   | `lc-db` | Trove DB インスタンス + ユーザー ✅ 実装・実機エンドツーエンド検証済み（2026-09-05）。Trove本体導入・ゲストイメージビルド・mysql/8.0データストア登録・`openstack database instance create`でのインスタンス起動(ACTIVE/HEALTHY)まで実機確認済み。手順は`17-production-runbook.md` Phase 5節、実機値・ハマった点は`local/polaris-access.md`参照。flavorのdisk容量がゲストイメージサイズ(約1.4GB)未満だとNovaに拒否される罠あり(`modules/lc-db/README.md`参照) |
    | `authentik-user` | Authentik ユーザー作成 |
    | `authentik-group` | Authentik グループ作成 |
 

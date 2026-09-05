@@ -327,12 +327,293 @@ gh secret list | grep MY_PRODUCT
 
 ---
 
-## Phase 5 以降
+## Phase 5 — workspace モジュール
 
-Phase 5（workspace モジュール）・Phase 6（Middleware API）・Phase 7（GitOps）は
-`16-implementation-phases.md` の各フェーズ説明を参照してください。
+`terraform/modules/` 側（`lc-vm`・`lc-k8s-app`・`lc-object-bucket` 等）の実装状況は
+`16-implementation-phases.md` を参照してください。ここでは `modules/lc-db`
+（Trove）が前提とする、**実機 OpenStack 側での Trove 有効化手順**（kolla-ansible）
+を扱います。Trove はコントロールプレーンのサービス追加であり Terraform の範囲外
+（インフラ担当が kolla-ansible で実行する）です。
 
-Phase 5 以降は Phase 4 完了後に着手します。
+> **確認レベルについての注記（2026-09-05 実機検証済み）**: 以下は実際に
+> Polaris 上で Trove を有効化し、ゲストイメージのビルド・データストア登録・
+> `openstack database instance create` によるインスタンス起動（`ACTIVE`/
+> `HEALTHY`）まで一通り確認済みの手順。実機値・つまずいた点は
+> `local/polaris-access.md`（gitignore 済み）に詳細を記録している。
+> kolla-ansible・Trove とも他バージョンでは挙動が変わり得るため、
+> 別環境で実行する際は `etc/kolla/globals.yml`・`ansible/roles/trove/` を
+> 自分のバージョンで確認すること。
+
+### 5-1. `globals.yml` の変更
+
+```yaml
+enable_trove: "yes"
+
+# デフォルト(false = multi-tenant)のままで良いか、5-4 のネットワーク要件を
+# 確認してから singletenant にするか判断する
+# enable_trove_singletenant: "yes"
+
+# Horizon を使っている場合のみ
+# enable_horizon_trove: "yes"
+```
+
+### 5-2. パスワードの追加生成
+
+既存の `passwords.yml`（初回デプロイ時に生成済み）には Trove 用のパスワードが
+無いため、`kolla-genpwd` で不足分だけ追加生成する（既存パスワードは変更されない）。
+
+```bash
+kolla-genpwd -p /etc/kolla/passwords.yml
+grep trove /etc/kolla/passwords.yml
+# trove_database_password: ...
+# trove_keystone_password: ...
+```
+
+### 5-3. デプロイ
+
+```bash
+kolla-ansible -i <inventory> deploy --tags trove,loadbalancer
+```
+
+> **実機で確認済みの罠（2026-09-05）**: `--tags trove` だけだと
+> `trove-manage db_sync`（bootstrap）が
+> `ProxySQL Error: Access denied for user 'trove'` で失敗する。
+> `enable_proxysql: true` な環境では、新サービスの DB ユーザーを ProxySQL に
+> 認識させる処理（`ansible/roles/proxysql-config/`）が `site.yml` の
+> 「Apply role loadbalancer」プレイ（`loadbalancer`/`haproxy`/`keepalived`
+> タグ）に属しており、サービス自身のタグだけでは ProxySQL コンテナの
+> 再設定・再起動が走らない。新サービスを追加する際は必ず
+> `--tags <service>,loadbalancer` を指定する。
+
+Keystone への Service・Endpoint・Service User 登録、Trove 用 DB・DB ユーザー作成は
+`ansible/roles/trove/tasks/bootstrap.yml`・`register.yml` で自動的に行われる
+（他サービスと同様、手動での `openstack service create` 等は不要）。
+Horizon の Trove パネルを有効化した場合は追加で:
+
+```bash
+kolla-ansible -i <inventory> reconfigure --tags horizon
+```
+
+### 5-4. ネットワーク要件（重要・実機トポロジ依存の設計判断が必要）
+
+`trove-guestagent.conf.j2`（ゲスト DB VM 内で動く trove-guestagent の設定）を
+確認すると、ゲスト VM は起動直後に control plane の RabbitMQ
+（`rpc_transport_url`）へ直接到達できる必要がある。
+
+- **multi-tenant モード**（`enable_trove_singletenant: false`。デフォルト）:
+  ゲスト VM は呼び出したプロジェクト自身のネットワークに直接接続される。
+  つまり **各プロジェクトのネットワークから control plane の内部 API 網へ
+  経路が無いと動かない**。本リポジトリの
+  `12-openstack-resources.md`「VPC Gateway 強制・独自 LB 作成禁止」方針では、
+  プロジェクトネットワークは共有外部網経由のみに限定する設計のため、
+  そのままでは満たせない可能性が高い。
+- **singletenant モード**（`enable_trove_singletenant: true`）:
+  ゲスト VM は呼び出し元プロジェクトではなく **Trove 自身の service
+  プロジェクト**に作られ、Trove が管理者権限で対象プロジェクトの
+  Nova/Cinder/Neutron を代理操作する（`trove.conf` の `nova_proxy_admin_*`・
+  `remote_nova_client = trove.common.clients_admin.nova_client_trove_admin`
+  等から確認）。内部 API 網へ接続する必要があるネットワークは
+  Trove の service プロジェクト用ネットワーク1つだけで済むため、
+  プロジェクトごとに経路を空ける multi-tenant モードよりも既存の
+  ネットワーク方針と衝突しにくい。
+
+いずれのモードでも、**Trove の service プロジェクト（または各プロジェクト）の
+ネットワークから、RabbitMQ が listen しているノード（`om_bind_address`）へ
+実際に到達できるか、有効化前に実機で確認すること**。ここは Terraform・
+kolla-ansible の変数だけでは解決しない、ネットワークトポロジ側の設計判断。
+
+> **実機確認済み（2026-09-05）**: Polaris では control plane の内部 API 網
+> （`kolla_internal_vip_address` のセグメント）と、プロジェクトの外部
+> ネットワーク（floating IP プール）が同一 L2/L3 セグメントで、プロジェクトの
+> ルーターが外部ゲートウェイ経由で SNAT するため、テナントのプライベート
+> サブネット上の VM から RabbitMQ へ追加設定無しで到達できた。
+> `enable_trove_singletenant` はデフォルト(false)のまま `openstack database
+> instance create` でインスタンスが `ACTIVE`/`HEALTHY` になることを確認済み。
+> 他環境では firewalld・iptables でこの到達を塞いでいないか含めて
+> 個別に確認すること。
+
+### 5-5. ゲストイメージ・データストアの登録（デプロイ後、Trove 管理者作業）
+
+kolla-ansible は Trove 本体のコンテナは用意するが、**ゲスト DB イメージ自体は
+含まれない**。デプロイ後に別途用意する必要がある（この部分は一度きりの
+管理者作業で、Terraform 化できない）。
+
+> **2026-09-05 時点でソースから裏取り済みの手順**（`openstack/trove`
+> `stable/2026.1` ブランチ）。旧 `trove-integration` リポジトリは
+> deprecated で内容は `trove` リポジトリの `integration/` 配下に統合済み。
+> この版の Trove は **ゲスト VM 内で DB エンジンを直接インストールせず、
+> Docker コンテナとして起動する方式**（`trove.guestagent.utils.docker`）。
+> ゲストイメージに必要なのは Docker + `trove-guestagent`（`pip install trove`
+> と同じパッケージの `trove-guestagent` エントリポイント）+ 専用の
+> docker ネットワークプラグイン（`trove-docker-plugin`）で、DB エンジン
+> 本体（例: `mysql:8.0`）はインスタンス作成時にゲストが自動で docker pull
+> する。ネイティブパッケージのビルドは不要。
+
+**1. ゲストイメージのビルド**（`disk-image-create`。ビルド用ホストに
+インターネットアクセスが必要）:
+
+> **実機の罠（2026-09-05・Rocky Linux 10）**: `disk-image-create` は debian
+> 系ツール（`debootstrap` 等）に依存する。Rocky/RHEL 系ホストでは EPEL の
+> `debootstrap` パッケージが `dpkg`（→ `libz-ng.so.2` 不在）で依存関係が
+> 壊れており `dnf install` できなかった。**Ubuntu コンテナの中でビルドする**
+> 方式に切り替えて解決した（kolla 環境なら Docker は既に入っている）。
+
+```bash
+git clone --depth 1 --branch stable/2026.1 \
+  https://opendev.org/openstack/trove.git /opt/trove-src
+mkdir -p ~/images
+
+# ip_forward が無効だと docker のブリッジネットワークが機能しない
+sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-docker-forward.conf
+
+# --network host: 既存のブリッジ設定が壊れている環境向けの回避策
+# -v /dev:/dev: Docker が用意する最小限の /dev には loop デバイスが無く、
+#               losetup が "No such file or directory" で失敗するため必須
+docker run --rm -it --privileged \
+  --network host \
+  -v /dev:/dev \
+  -v /opt/trove-src:/opt/trove-src \
+  -v ~/images:/root/images \
+  ubuntu:24.04 bash
+```
+
+コンテナの中で:
+
+```bash
+apt-get update
+apt-get install -y qemu-utils git kpartx debootstrap squashfs-tools \
+  python3-pip python3-venv sudo curl
+
+python3 -m venv /root/dib-venv
+/root/dib-venv/bin/pip install --upgrade pip setuptools diskimage-builder
+source /root/dib-venv/bin/activate
+
+export PATH_TROVE=/opt/trove-src
+export ELEMENTS_PATH=${PATH_TROVE}/integration/scripts/files/elements
+export DIB_RELEASE=noble          # Ubuntu 24.04。他 root の base image と揃える
+export DISTRO_NAME=ubuntu
+export DIB_CLOUD_INIT_DATASOURCES="ConfigDrive, OpenStack"
+export DIB_CLOUD_INIT_ETC_HOSTS=localhost
+export GUEST_USERNAME=ubuntu
+export DEV_MODE=false             # true にすると devstack 前提の SCP 経由開発モードになる
+export SYNC_LOG_TO_CONTROLLER=False
+export HOST_SCP_USERNAME=root
+export ESCAPED_PATH_TROVE=$(echo ${PATH_TROVE} | sed 's/\//\\\//g')
+
+disk-image-create -x -a amd64 \
+  -o /root/images/trove-guest-ubuntu-noble.qcow2 \
+  -t qcow2 \
+  --image-size 5 \
+  --image-cache /root/.cache/image-create \
+  base vm ubuntu-minimal cloud-init-datasources pip-cache guest-agent ubuntu-docker
+```
+
+`guest-agent` element が `https://opendev.org/openstack/trove` の
+`stable/2026.1` を自動 clone するため、trove-guestagent 自体を別途
+pip install する必要はない（コントロールプレーンと同じ `trove` パッケージの
+`trove-guestagent` エントリポイントを使う）。ビルドには10分程度かかる。
+
+**2. Glance へ登録**（`--tag trove` を付ける。後述の
+`trove-manage --image-tags trove` がこのタグで最新イメージを自動解決する
+ため、image_id を都度差し替えなくて済む）:
+
+```bash
+source /etc/kolla/admin-openrc.sh
+openstack image create trove-guest-ubuntu-noble \
+  --disk-format qcow2 --container-format bare \
+  --file ~/images/trove-guest-ubuntu-noble.qcow2 \
+  --property hw_rng_model=virtio \
+  --tag trove
+```
+
+**3. `docker_image` の設定**（Trove の mysql マネージャの `docker_image`
+デフォルトは `mysql`（Docker Hub 公式イメージ）だが、ゲストに配布される
+`trove-guestagent.conf` の実ファイルに `[mysql]` セクションが無いと
+`crudini` が値を読めず失敗する。kolla のカスタム設定で明示的に追加する）:
+
+```bash
+mkdir -p /etc/kolla/config
+cat >> /etc/kolla/config/trove-guestagent.conf <<'EOF'
+
+[mysql]
+docker_image = mysql
+EOF
+
+kolla-ansible reconfigure -i multinode --tags trove,loadbalancer
+```
+
+**4. データストア・バージョンの登録**（`trove_api` コンテナ内で
+`trove-manage` を実行。引数の順序は
+`datastore_version_update <datastore> <version_name> <manager> <image_id> <packages> <active> [--image-tags TAG]`。
+`manager` はデータストア種別と同じ文字列(`mysql`)、`image_id` は空文字にして
+`--image-tags trove` で 2 で付けたタグから自動解決させる）:
+
+```bash
+docker exec -it trove_api trove-manage datastore_update mysql ""
+docker exec -it trove_api trove-manage datastore_version_update \
+  mysql 8.0 mysql "" "" 1 --image-tags trove
+docker exec -it trove_api trove-manage datastore_update mysql 8.0
+```
+
+`trove-manage datastore_version_update --help`（コンテナ内で実行）で
+引数を再確認できる。
+
+**検証:**
+
+```bash
+# Keystone に database サービスが登録されていること
+openstack catalog list | grep database
+
+# python-troveclient（openstack CLI の database プラグイン）が無い場合は追加。
+# kolla-venv とは別の軽量 venv に入れるのが安全
+python3 -m venv /root/trove-client-venv
+/root/trove-client-venv/bin/pip install python-openstackclient python-troveclient
+source /etc/kolla/admin-openrc.sh
+
+# サブコマンドに "database" プレフィックスは付かない点に注意
+/root/trove-client-venv/bin/openstack datastore list
+/root/trove-client-venv/bin/openstack datastore version list mysql
+/root/trove-client-venv/bin/openstack database instance list
+```
+
+### 5-6. エンドツーエンド確認（2026-09-05 実施・完了）
+
+実際にインスタンスを作成し、ゲスト VM 起動 → Docker で MySQL コンテナ起動 →
+control plane への状態報告、まで一通り動くことを確認した。
+
+```bash
+openstack network list   # プロジェクトのネットワーク ID を確認
+
+/root/trove-client-venv/bin/openstack database instance create test-mysql-01 \
+  --flavor m1.small \
+  --size 1 \
+  --datastore mysql --datastore-version 8.0 \
+  --nic net-id=<プロジェクトネットワークID>
+
+# 数分待つと status が BUILD → ACTIVE、operating_status が HEALTHY になる
+watch -n 10 /root/trove-client-venv/bin/openstack database instance show test-mysql-01
+
+# 確認後は削除
+/root/trove-client-venv/bin/openstack database instance delete test-mysql-01
+```
+
+> **実機の罠**: `--flavor m1.tiny`（disk=1GB）だと
+> `Flavor's disk is too small for requested image` で instance-create 自体が
+> `ERROR` になる。ゲストイメージのファイルサイズ（このビルドでは約1.4GB）
+> より disk が大きい flavor（`m1.small`＝20GB 以上）を使うこと。
+> `modules/lc-db` の `var.flavor` にも同じ制約が当てはまる
+> （`terraform/modules/lc-db/README.md` 参照）。
+
+`modules/lc-db` 側（Terraform）は、上記のデータストア登録が終わった後の
+「プロジェクトが Trove インスタンスを作る」部分のみを扱う。
+
+---
+
+## Phase 6・7
+
+Phase 6（Middleware API）・Phase 7（GitOps）は `16-implementation-phases.md` の
+各フェーズ説明を参照してください。
 CloudKitty（billing）の実装方針が確定し次第、Phase 6 の billing/ モジュールを追加します。
 
 ---
