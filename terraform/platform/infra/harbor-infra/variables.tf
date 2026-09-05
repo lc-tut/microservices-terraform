@@ -23,8 +23,8 @@ variable "flavor_name" {
 
 variable "root_volume_size" {
   type        = number
-  description = "ルートボリューム GB。レジストリに push されるイメージ本体を溜め込む前提で余裕を見て 40"
-  default     = 40
+  description = "ルートボリューム GB。レジストリに push されるイメージ本体を溜め込む前提で 25（要 push 済みイメージの実使用量確認。増やす場合は Cinder ボリューム拡張のみ可能、縮小はインスタンス作り直しが必要）"
+  default     = 25
 }
 
 variable "private_network_name" {

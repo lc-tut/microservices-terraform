@@ -23,8 +23,8 @@ variable "flavor_name" {
 
 variable "root_volume_size" {
   type        = number
-  description = "ルートボリューム GB。docker イメージ(~2GB) + postgres データ + ログの余裕を見て 40"
-  default     = 40
+  description = "ルートボリューム GB。docker イメージ(~2GB) + postgres データ + ログを見込んで 20（実機の lc-dev 規模なら十分な余裕）"
+  default     = 20
 }
 
 variable "private_network_name" {

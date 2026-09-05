@@ -22,8 +22,8 @@ variable "flavor_name" {
 
 variable "root_volume_size" {
   type        = number
-  description = "ルートボリューム GB。Prometheus TSDB の保持期間分の余裕を見て 20"
-  default     = 20
+  description = "ルートボリューム GB。Prometheus TSDB retention 45d 分の余裕を見て 15（ベースイメージの min_disk 10GB + TSDB分）"
+  default     = 15
 }
 
 variable "private_network_name" {

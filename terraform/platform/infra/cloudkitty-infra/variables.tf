@@ -23,8 +23,8 @@ variable "flavor_name" {
 
 variable "root_volume_size" {
   type        = number
-  description = "ルートボリューム GB。InfluxDB のメトリクス蓄積分の余裕を見て 30"
-  default     = 30
+  description = "ルートボリューム GB。InfluxDB は retention policy 未設定で無期限蓄積のため余裕を見て 20（増加傾向を見て要調整）"
+  default     = 20
 }
 
 variable "private_network_name" {
