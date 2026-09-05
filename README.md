@@ -55,6 +55,12 @@ microservices-terraform/
 | 16 | [実装フェーズ](documents/terraform/16-implementation-phases.md) | フェーズ別構築順序・依存関係 |
 | 17 | [本番構築ランブック](documents/terraform/17-production-runbook.md) | 本番環境ゼロからの構築手順 |
 
+### 関連リポジトリ
+
+| ドキュメント | 内容 |
+| --- | --- |
+| [lcc-external-app まとめ](documents/lcc-external-app.md) | 先行実装されている公開 API（LC-Cloud Middle API）の要約と、本リポジトリへの影響 |
+
 ---
 
 ## 環境構築
