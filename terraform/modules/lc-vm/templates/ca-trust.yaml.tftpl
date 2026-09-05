@@ -1,0 +1,15 @@
+#cloud-config
+# 鍵ペア(openstack_compute_keypair_v2)を使わない方針
+# (12-openstack-resources.md「SSH 鍵の非 Terraform 管理」)のため、
+# CLI が発行する短命 SSH 証明書を sshd に信頼させる設定をここで注入する。
+write_files:
+  - path: /etc/ssh/ca.pub
+    permissions: '0644'
+    content: |
+      ${ssh_ca_public_key}
+  - path: /etc/ssh/sshd_config.d/10-trusted-ca.conf
+    permissions: '0644'
+    content: |
+      TrustedUserCAKeys /etc/ssh/ca.pub
+runcmd:
+  - systemctl restart sshd
