@@ -79,3 +79,28 @@ variable "iap_tunnel_users" {
   type        = list(string)
   default     = []
 }
+
+variable "shared_vm_owner" {
+  description = <<-EOT
+    構築済み VM を複製して渡す相手のメールアドレス（例 "someone@example.com"）。
+    空文字なら複製 VM もイメージも作らない。
+    設定すると複製 VM・専用の外部 IP・IAP トンネル権限が作られる。
+    複製 VM は複製元と同じ料金がかかるので、使い終わったら空に戻して apply すること。
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "shared_devstack_admin_password" {
+  description = "共有 VM の OpenStack admin パスワード。複製元とは別の値にする"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "shared_harbor_admin_password" {
+  description = "共有 VM の Harbor admin パスワード。複製元とは別の値にする"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

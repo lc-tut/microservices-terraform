@@ -50,10 +50,11 @@ microservices-terraform/
 | 11 | [ワークスペース設定](documents/terraform/11-workspace-config.md) | project-config.yaml・Tier 3 の使い方 |
 | 12 | [OpenStack リソース](documents/terraform/12-openstack-resources.md) | Keystone・Nova・Neutron・Cinder 設定 |
 | 13 | [運用レイヤー](documents/terraform/13-operation-layers.md) | 運用責任分離・エスカレーションフロー |
-| 14 | [ミドルウェアアーキテクチャ](documents/terraform/14-middleware-architecture.md) | Authentik・Harbor 統合設計 |
+| 14 | [Middleware API](documents/terraform/14-middleware-architecture.md) | infra-api / billing-api / k8s-api の設計・Authentik Outpost 認証・GUI からの利用方法 |
 | 15 | [ローカル開発](documents/terraform/15-local-development.md) | ローカル環境構築・act による CI ローカル実行 |
 | 16 | [実装フェーズ](documents/terraform/16-implementation-phases.md) | フェーズ別構築順序・依存関係 |
 | 17 | [本番構築ランブック](documents/terraform/17-production-runbook.md) | 本番環境ゼロからの構築手順 |
+| 18 | [権限管理（RBAC）](documents/terraform/18-access-control.md) | Authentik グループ・Keystone ロール・Harbor・K8s RBAC への写像 |
 
 ---
 

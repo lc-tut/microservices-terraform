@@ -16,7 +16,7 @@
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | K8s 操作 | gcloud components または単体 |
 | [openstack CLI](https://docs.openstack.org/python-openstackclient/latest/) | Application Credential 発行・動作確認 | `pip install python-openstackclient` |
 | [PySocks](https://pypi.org/project/PySocks/) | openstack CLI の SOCKS5 プロキシ対応 | `pip install pysocks` |
-| [act](https://github.com/nektos/act) | GitHub Actions ローカル実行 | Section 4 参照 |
+| [act](https://github.com/nektos/act) | GitHub Actions ローカル実行 | Section 5 参照 |
 
 > **WSL2 の場合**: Docker Desktop（Windows 側）を WSL2 バックエンドで動かすか、
 > WSL2 内に Docker Engine を直接インストールしてください。
@@ -34,6 +34,7 @@
 │                                             │
 │  Docker（単体コンテナ）                      │
 │    └─ MinIO（S3 互換 State バックエンド）:19000 │
+│    └─ Vault（dev モード）            :8200  │
 │                                             │
 │  kind                                       │
 │    └─ ローカル K8s クラスター               │
@@ -44,7 +45,7 @@
               │ IAP トンネル (SSH / 80 / 8080)
               ▼
 ┌─────────────────────────────────────────────┐
-│  GCP VM (local/gcp-devstack/, e2-standard-4) │
+│  GCP VM (local/gcp-devstack/, n2-standard-4) │
 │    OpenStack (DevStack)      :80             │
 │         Keystone  /identity                 │
 │         Nova      /compute/v2.1              │
@@ -52,6 +53,7 @@
 │         Glance    /image                     │
 │         Placement /placement                 │
 │         Horizon   /                          │
+│         Cinder / Swift / CloudKitty / Trove  │
 │    Harbor（最小構成）         :8080          │
 └─────────────────────────────────────────────┘
 ```
@@ -230,12 +232,32 @@ gcloud compute ssh devstack-harbor \
 指してしまい失敗する）。
 
 ```bash
+# openstack CLI（Python / requests）向け
 export ALL_PROXY=socks5h://localhost:1080
+# terraform の各プロバイダー（Go）向け。下記のとおり ALL_PROXY だけでは効かない
+export HTTP_PROXY=socks5://localhost:1080
+export HTTPS_PROXY=socks5://localhost:1080
 export NO_PROXY=localhost,127.0.0.1
 export no_proxy=localhost,127.0.0.1
 ```
 
-`openstack` CLI の Python 環境に `PySocks`（`pip install pysocks`）が
+**`ALL_PROXY` だけでは `terraform` に効きません。** `ALL_PROXY` は curl や
+Python の `requests` の慣習であり、Go の `http.ProxyFromEnvironment` は
+`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` しか読みません。OpenStack
+プロバイダーは Go 製のため、`HTTP_PROXY` を設定しないと Keystone の
+サービスカタログが返す VM 内部 IP へ直接接続しようとして
+
+```text
+Error creating OpenStack identity client: Post "http://10.10.0.4/identity/v3/auth/tokens":
+dial tcp 10.10.0.4:80: connect: connection timed out
+```
+
+で失敗します（2026-09-06 実機確認）。Go は `HTTP_PROXY` の値として
+`socks5://` スキームを解釈できるため、SOCKS5 プロキシをそのまま指定できます
+（`socks5h://` は Go 側で未対応のバージョンがあるため `socks5://` を使う。
+接続先が IP 直指定でありプロキシ側での名前解決は不要）。
+
+`openstack` CLI の Python 環境には `PySocks`（`pip install pysocks`）が
 必要です。`requests` ライブラリが `socks5h://` を解釈できるようにする
 ためのパッケージで、無ければ `SOCKSHTTPConnectionPool ... Failed to
 establish a new connection` のようなエラーになります。
@@ -270,6 +292,13 @@ openstack application credential create dev-terraform \
 
 出力された `id` / `secret` を `local/clouds.yaml` の `gcp-devstack`
 エントリーに書き込む。
+
+> **DevStack を再構築すると Application Credential は消えます。**
+> `clouds.yaml` の値は残ったままなので、次に使うとき
+> `Could not find Application Credential: <id>. (HTTP 404)` になります。
+> その場合はこの手順で再発行して `clouds.yaml` を上書きしてください。
+> `secret` は作成時にしか表示されないため、控え損ねたら削除して作り直します
+> （`openstack application credential delete <id>`）。
 
 ### 動作確認
 
@@ -350,7 +379,7 @@ terraform plan -var="project_name=test-project" -var="team_name=web"
 
 ### 起動
 
-`local/start.sh`（後述の「5. 全サービス起動」参照）が初回のみ `.env` を
+`local/start.sh`（後述の「6. 全サービス起動」参照）が初回のみ `.env` を
 自動生成して起動します。`AUTHENTIK_SECRET_KEY` に加えて
 `AUTHENTIK_BOOTSTRAP_PASSWORD`（akadmin の初期パスワード）・
 `AUTHENTIK_BOOTSTRAP_TOKEN`（Terraform provider 用 API トークン）も
@@ -422,7 +451,36 @@ k8s-api の動作確認はこのクラスターを使います。
 
 ---
 
-## 4. GitHub Actions (act)
+## 4. Vault (dev モード)
+
+Middleware API が実行時にプロジェクトごとの Application Credential を読む先です
+（`14-middleware-architecture.md`）。`local/start.sh` が dev モードで起動し、
+`kv-v2` を `kv/` にマウントします。ルートトークンは初回起動時に生成され
+`local/vault/.env` に保存されます（gitignore 済み）。
+
+```bash
+. local/vault/.env          # VAULT_ADDR と VAULT_TOKEN が入る
+export VAULT_ADDR VAULT_TOKEN
+
+vault kv put kv/app-creds/my-workspace \
+  app_cred_id=... app_cred_secret=... team_name=web
+
+vault kv get kv/app-creds/my-workspace
+```
+
+`vault` CLI が手元に無ければコンテナ内のものを使えます。
+
+```bash
+docker exec -e VAULT_TOKEN -e VAULT_ADDR=http://127.0.0.1:8200 \
+  vault-local vault kv get kv/app-creds/my-workspace
+```
+
+dev モードなのでデータはメモリ上のみで、コンテナを消すと失われます。
+UI は http://localhost:8200 で、同じトークンでログインできます。
+
+---
+
+## 5. GitHub Actions (act)
 
 GitHub Actions ワークフローをローカルで実行するために
 [act](https://github.com/nektos/act) を使います。
@@ -495,7 +553,7 @@ act pull_request \
 
 ---
 
-## 5. 全サービス起動
+## 6. 全サービス起動
 
 `local/start.sh` で Authentik・MinIO（S3 互換 State バックエンド）・kind を
 一括起動できます（初回は `tfstate` バケットの作成、Authentik の `.env` 自動生成も行う）。
@@ -509,7 +567,7 @@ bash local/start.sh
 
 ---
 
-## 6. 開発フロー
+## 7. 開発フロー
 
 ### Application Credential と Access Rules のテスト
 
@@ -550,7 +608,7 @@ terraform apply -var="team_name=test-team" -auto-approve
 
 ---
 
-## 7. ローカルと本番の切り替え
+## 8. ローカルと本番の切り替え
 
 `terraform/local-override.tf` は git 管理しません。
 本番では GitHub Secrets の認証情報を CI が使うため、このファイルを削除するだけで戻ります。
@@ -565,7 +623,7 @@ rm terraform/local-override.tf
 
 ---
 
-## 8. アイドル自動停止
+## 9. アイドル自動停止
 
 ### VM 側（メイン）
 

@@ -23,7 +23,8 @@ Terraform はアカウントの**初期作成のみ**を担い、username・GitH
 
 > Student Email は現在の大学メール形式（`c0a24XXXLL@edu.teu.ac.jp`）に学籍番号が含まれます。
 > どちらか一方の漏洩が両方の漏洩に相当するため、同じ PII として扱います。
-> **email は暗号化ファイル以外には一切出ません。**
+> **Git 上では暗号化ファイルにしか置きません**が、Authentik ユーザーの属性として
+> 設定するため Terraform State には平文で入ります（後述「Terraform State と PII」）。
 
 ---
 
@@ -509,10 +510,20 @@ sops members_secrets.yaml.enc
 
 ---
 
-## Terraform State への PII 混入防止
+## Terraform State と PII
 
-- Authentik に渡すメールは `{id}@linuxclub.example`（club alias）のみ → State に real email が入らない
-- real email は `members_secrets.yaml.enc` にのみ存在し、Mailu 同期スクリプトが直接読む
-- username・GitHub username は Authentik が保持し、Terraform State には入らない
-- Student ID は Authentik ユーザー属性として State に含まれるため、
-  State バックエンド（Ceph RGW）へのアクセスは管理者限定に制限する
+`platform/members/` は `members_secrets.yaml.enc` を復号した値を
+Authentik ユーザーに設定するため、**State には PII が平文で入ります**。
+
+| 項目 | State に入るか | 備考 |
+| --- | --- | --- |
+| Student Email | 入る | `authentik_user.email` に実アドレスを設定するため |
+| Student ID | 入る | `authentik_user.attributes.student_id` に設定するため |
+| username・display_name | 入る | 非 PII |
+| パスワード・MFA シークレット | 入らない | Authentik のみが保持 |
+
+したがって State バックエンド（Ceph RGW）は PII を含むデータストアとして扱い、
+アクセスを CI の認証情報と管理者に限定します。保存時暗号化も有効にします。
+
+> メールを club alias（`{id}@linuxclub.example`）に置き換えて State から実アドレスを
+> 排除する案は、転送の仕組み（Mailu 等）が必要になるため採っていません。

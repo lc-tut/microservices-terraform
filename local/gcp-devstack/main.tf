@@ -108,4 +108,13 @@ resource "google_compute_instance" "devstack" {
     external_ip             = google_compute_address.devstack.address
     harbor_version          = var.harbor_version
   })
+
+  lifecycle {
+    # bootstrap は /opt/gcp-devstack/.bootstrapped で初回のみ実行に守られており、
+    # 構築後の VM にとって起動スクリプトの内容は意味を持たない。
+    # 無視しないと、スクリプトを直すたびに構築済みの VM が作り直される
+    # （DevStack の再構築に 40 分前後かかる）。
+    # 新しく作る VM には、その時点の最新のスクリプトが入る
+    ignore_changes = [metadata_startup_script]
+  }
 }

@@ -20,8 +20,8 @@
 | リポジトリホスティング | **GitHub** | Actions・CODEOWNERS・Branch Protection が揃っている |
 | 複雑化対策 | **Terragrunt** | DRY 化・スタック間の依存管理（規模拡大時に導入） |
 | シークレット管理 | **SOPS（age 暗号化）** | PII を Git で安全に管理する |
-| State バックエンド | **Ceph RGW（S3 互換）** | LC-Cloud 上に既存、暗号化済み |
-| State 暗号化 | **不要** | PII を State に含めない設計 + Ceph が暗号化済み |
+| State バックエンド | **Ceph RGW（S3 互換）** | LC-Cloud 上に既存、保存時暗号化あり |
+| State の保護 | **バケットのアクセス制限** | State には PII が含まれるため（下記「PII の保護」参照） |
 
 ---
 
@@ -47,8 +47,17 @@ Application Credential を使用し、OpenStack API レベルで操作範囲を�
 
 ### 3. PII の保護
 
-Student Email・Student ID などの個人情報は SOPS で暗号化し、
-Terraform の State には含めない設計とする（詳細は `03-member-management.md` 参照）。
+Student Email・Student ID などの個人情報は **Git 上では SOPS（age）で暗号化**して
+管理します（詳細は `03-member-management.md` 参照）。
+
+一方、**Terraform の State には復号後の PII が入ります**。Authentik ユーザーの
+`email` と `attributes.student_id` に実際の値を設定するためで、State は
+これらを平文で保持します。したがって State バックエンドは PII を含む
+データストアとして扱い、次を満たす必要があります。
+
+- バケットへのアクセスを CI の認証情報と管理者に限定する
+- 保存時暗号化を有効にする
+- ローカルに落とした `terraform.tfstate` を Git にコミットしない（`.gitignore` 済み）
 
 ### 4. チームへの権限委譲
 
@@ -99,7 +108,7 @@ CODEOWNERS による承認ゲートを通過してから apply する。
 | `07-quota.md` | OpenStack クォータ設計 |
 | `08-billing.md` | 請求アカウント管理 |
 | `09-costs.md` | コスト・予算設計 |
-| `10-roles-and-permissions.md` | ロール・権限・CODEOWNERS |
+| `10-roles-and-permissions.md` | リポジトリ上の承認権限・CODEOWNERS |
 | `11-workspace-config.md` | ワークスペース設定（project-config.yaml） |
 | `12-openstack-resources.md` | OpenStack リソース管理方針・Tier 分類・Access Rules |
 | `13-operation-layers.md` | Terraform / Middleware / GitOps の操作レイヤー設計 |
@@ -107,3 +116,4 @@ CODEOWNERS による承認ゲートを通過してから apply する。
 | `15-local-development.md` | ローカル開発環境（GCP DevStack・Authentik・kind・act） |
 | `16-implementation-phases.md` | 実装フェーズ・順序・レビュー |
 | `17-production-runbook.md` | 本番構築手順書（Phase 1〜4 の具体的な手順） |
+| `18-access-control.md` | チーム・プロジェクトの実リソース権限（RBAC） |
