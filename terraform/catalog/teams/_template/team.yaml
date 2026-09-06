@@ -1,0 +1,27 @@
+# チーム単位の運用ポリシー。
+#
+# 承認者: circle-admin のみ（.github/CODEOWNERS で強制）
+#
+# 「チームごとの柔軟性」をロールを増やさずに出すための仕組み
+# （documents/terraform/18-access-control.md「軸 2」）。
+# 厳しくする方向は自由に設定でき、緩くする方向は platform が定めた上限まで、
+# という一方向の設計にしてある。
+
+policy:
+  # workspaces/ のマージに必要な承認数。1 または 2
+  workspace_approvals: 1
+
+  # member が自分の workspaces/ PR を自分で承認して通せるか。
+  # true にする場合、GitHub 側の Branch Protection も合わせて緩める必要がある
+  allow_member_self_approve: false
+
+  # member が catalog/projects/ に新規プロジェクトの PR を出せるか。
+  # false の場合、プロジェクト作成申請は owner のみが提出できる
+  allow_member_create_project: true
+
+  # チームメンバーがプロジェクトへ継承されるときの既定ロール。member または viewer
+  default_project_role: member
+
+  # このチームに Harbor project を払い出すか。enabled または disabled
+  # （Harbor 連携は 18-access-control.md 実装ステップ 4。現時点では未配線）
+  harbor: enabled

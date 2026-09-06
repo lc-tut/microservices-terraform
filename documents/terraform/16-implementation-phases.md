@@ -12,6 +12,7 @@ Phase 1  GitHub / CI 基盤
 Phase 2  Authentik（IdP）
 Phase 3  OpenStack platform          ✅
 Phase 4  catalog（billing / teams / projects）
+Phase 4.5 チーム・プロジェクト権限管理（RBAC）
 Phase 5  workspace モジュール
 Phase 6  Middleware API
 Phase 7  GitOps
@@ -31,6 +32,7 @@ Phase 0
        └─ Phase 2（Authentik）
             └─ Phase 3（OpenStack platform）
                  └─ Phase 4（catalog）
+                      ├─ Phase 4.5（RBAC）
                       ├─ Phase 5（workspace modules）
                       │    └─ Phase 8（DNS）
                       │         └─ Phase 9（共有 Ingress / LB）
@@ -269,6 +271,65 @@ network/subnet/router interface・Application Credential が全て実際に
 
 ---
 
+## Phase 4.5 — チーム・プロジェクト権限管理（RBAC）
+
+**目標**: チーム・プロジェクトに「所属する」という状態を各システムに作り、
+メンバーが自分のアカウントで実リソースを操作できるようにする。
+
+設計は `18-access-control.md` を参照。
+
+**背景**: Phase 4 完了時点で `catalog/teams/<t>/` が作るのは
+Authentik Group・Keystone project・クォータだけで、**そこに人が紐づいていなかった**。
+Keystone の role assignment も自動化アカウントにしか張られておらず、
+メンバーは自分のアカウントで Horizon にも OpenStack API にもアクセスできない状態だった。
+
+**作業内容**:
+
+1. `terraform/modules/lc-role-map/` の実装 ✅
+   抽象ロール（`owner` / `member` / `viewer`）→ Keystone / Harbor / K8s / GitHub の
+   ネイティブロールへの写像表。provider を持たない純ロジックモジュールで、
+   写像をリポジトリ全体で 1 箇所に閉じ込めるためだけに存在する
+
+1. `terraform/catalog/teams/_template/` の権限管理対応 ✅
+   - `owners.yaml`（circle-admin 承認）・`members.yaml`（team-lead 承認）・`team.yaml`
+   - `access.tf` — ロール別 Authentik グループ + Keystone グループ +
+     project へのロール付与、および不変条件の `precondition` 検証
+   - `lc_cloud.tf` の `member` ロール参照を写像表由来の
+     `data.openstack_identity_role_v3.role_by_name` に統合
+
+1. `terraform/platform/members/team_memberships.tf` の実装 ✅
+   ユーザーのグループ所属を書く唯一の口。`catalog/teams/*/` の yaml を
+   ファイルとして読み、`authentik_user.groups` にまとめて反映する
+
+1. `platform/github/` の yaml 走査対応・Harbor・K8s RoleBinding・
+   project スコープ・CI ガード — 未着手（`18-access-control.md` の実装ステップ 3 以降）
+
+**成果物**: `owners.yaml` / `members.yaml` に 1 行足して PR を出すだけで、
+Authentik グループ・Keystone ロールまで一気通貫で反映される状態。
+
+> **状態**: ローカル開発環境（GCP DevStack + ローカル Authentik）で
+> **エンドツーエンド検証済み（2026-09-06）**。`rbac-test` チームを実際に
+> apply して Keystone project・グループ・role assignment・クォータ・
+> Authentik グループが作られること、ロール写像が実 role ID に一致すること
+> （`owner`/`member` → `member`、`viewer` → `reader`）、再 plan が clean で
+> あること、`platform/members/` がグループを名前解決してメンバーに割り当てる
+> ことを確認し、`terraform destroy` で残骸なく削除した。precondition 6 種の
+> 異常系もすべて plan 時に発火することを確認済み。
+> **本番（Polaris / 本番 Authentik）への apply は未実施**。適用前に本番
+> Keystone に `reader` ロールが存在することを確認すること
+> （DevStack には存在した。Ussuri 以降の既定ロールだが環境により未定義のことがある）。
+>
+> **実装で判明した制約**: Authentik の所属 API は `authentik_user.groups` /
+> `authentik_group.users` のどちらも「集合の丸ごと置き換え」であるため、
+> `catalog/teams/` と `platform/members/` の両方から書くと
+> 2 つのスタックが互いの変更を消し合う無限 drift になる。
+> そのため「グループを作り権限を張るのは `catalog/teams/`、
+> 誰が入るかを書くのは `platform/members/`」と役割を分けた。
+> 副次的に、台帳の status を `ob-og` / `alumni` に変えるだけで
+> 全チームの権限が確実に外れるという性質が得られている。
+
+---
+
 ## Phase 5 — workspace モジュール
 
 **目標**: プロジェクトオーナーが自由にインフラを定義できる再利用可能モジュールを提供する。
@@ -303,9 +364,16 @@ network/subnet/router interface・Application Credential が全て実際に
 
 **前提条件**:
 
-- Phase 4 完了（各プロジェクトの Application Credential が GitHub Secrets に登録済みであること）
 - `lc-platform` Namespace が K8s に存在すること
 - Ingress Controller（Traefik / Nginx）がデプロイ済みであること
+- **Vault が稼働していること**。Middleware API は実行時にプロジェクトごとの
+  Application Credential を Vault から読む（`14-middleware-architecture.md`）。
+  GitHub Secrets は GitHub Actions の中でしか読めず、Kubernetes 上で動く
+  サービスの取得先にはならないため、[P1] とは別に必要になる
+- `catalog/projects/_template` が apply 時に `kv/app-creds/{project_name}` へ
+  `app_cred_id`・`app_cred_secret`・`team_name` を書き込むこと。
+  現在の `_template` は `team_name` 変数を持たず Vault にも書かないため、
+  Phase 6 着手前に追加する
 
 **作業内容**:
 
@@ -427,10 +495,17 @@ k8s Ingress Controller に集約して外部公開する。プロジェクトご
 
 ### ✅ 解決済み
 
-**[P1] CI/CD 認証情報管理 → GitHub Secrets に変更**
+**[P1] CI/CD 認証情報管理 → GitHub Secrets**
 
-Vault は導入せず、GitHub Secrets に直接保存する。
-`06-cicd.md` の `vault-action` ステップを削除し、`${{ secrets.* }}` で参照する。
+**CI/CD（GitHub Actions）が使う認証情報**は Vault を経由せず GitHub Secrets に
+直接保存する。`06-cicd.md` の `vault-action` ステップを削除し、
+`${{ secrets.* }}` で参照する。
+
+> Middleware API が**実行時に**プロジェクトごとの Application Credential を
+> 取得する経路は別で、そちらは Vault を使います（Phase 6 の前提。
+> `14-middleware-architecture.md` 参照）。GitHub Secrets は GitHub Actions の
+> 中でしか読めないため、Kubernetes 上で動くサービスの取得先にはなりません。
+
 必要な Secrets:
 
 | Secret 名 | 内容 |

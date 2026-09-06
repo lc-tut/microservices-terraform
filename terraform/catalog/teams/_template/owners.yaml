@@ -1,0 +1,19 @@
+# チームの owner（責任者）。
+#
+# 承認者: circle-admin のみ（.github/CODEOWNERS で強制）
+#   members.yaml と分けているのは「権限を配る権限」を owner 自身が
+#   拡大できないようにするため。CODEOWNERS の粒度はファイル単位なので、
+#   同じファイルに owner と member を混ぜると表現できない。
+#   詳細は documents/terraform/18-access-control.md「設計の 3 原則」参照。
+#
+# 制約（access.tf の precondition で検証）:
+#   - 2 人以上必須。GitHub は PR 作成者自身の CODEOWNERS 承認をカウントしないため、
+#     1 人だと自チームの PR を誰もマージできなくなる
+#   - id は platform/members/ の台帳に存在し、かつ status が active であること
+#
+# id は platform/members/active/grad-XXXX/members.yaml の lcn_xxxxxxxxxxxx。
+
+owners: []
+# owners:
+#   - id: lcn_9a2bb6e30171
+#   - id: lcn_1234abcd5678

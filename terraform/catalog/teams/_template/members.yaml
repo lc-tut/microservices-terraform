@@ -1,0 +1,22 @@
+# チームの member / viewer。
+#
+# 承認者: circle-admin または @org/<team>-lead（.github/CODEOWNERS で強制）
+#   owner の追加・削除は owners.yaml 側で行う（circle-admin 承認が必要）。
+#
+# role:
+#   member — 普段作る人。VM/PVC の作成、workspaces/ へ PR、イメージ push
+#   viewer — 見るだけの人。Horizon・Harbor・ログの閲覧。承認権なし
+#
+# grants: ロールとは独立に付与するアドオン権限（省略可）。
+#   語彙は modules/lc-role-map の output "grants" で定義されている：
+#     billing-view / billing-request / harbor-admin / k8s-exec / secret-admin
+#   「この人だけ請求を見られる」を新しいロールを作らずに表現するための仕組み。
+#   詳細は documents/terraform/18-access-control.md「軸 1」参照。
+
+members: []
+# members:
+#   - id: lcn_aaaabbbbcccc
+#     role: member
+#     grants: [billing-view]
+#   - id: lcn_ddddeeeeffff
+#     role: viewer

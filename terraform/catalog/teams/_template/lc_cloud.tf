@@ -27,16 +27,14 @@ module "quota" {
 # catalog/projects/ 側で `provider "openstack" { tenant_id = ... }` として
 # このプロジェクトにスコープしなおせるよう、自動化アカウントに member ロールを
 # 事前に付与しておく。
-data "openstack_identity_role_v3" "member" {
-  name = "member"
-}
-
 data "openstack_identity_user_v3" "automation" {
   name = var.automation_username
 }
 
+# member ロールの参照は access.tf の data.openstack_identity_role_v3.role_by_name
+# （ロール写像表から引く for_each）を共用する。
 resource "openstack_identity_role_assignment_v3" "automation_member" {
   project_id = openstack_identity_project_v3.this.id
   user_id    = data.openstack_identity_user_v3.automation.id
-  role_id    = data.openstack_identity_role_v3.member.id
+  role_id    = data.openstack_identity_role_v3.role_by_name["member"].id
 }

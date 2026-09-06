@@ -19,16 +19,28 @@ resource "authentik_user" "members" {
   # 意思表示のため false（初回設定完了後の挙動は下記 ignore_changes 参照）
   is_active = each.value.status == "ob-og" ? true : false
 
+  # チーム所属（team_memberships.tf）もここでまとめて書く。
+  # Authentik の所属は「集合の丸ごと置き換え」なので、書き込み口を
+  # このリソース 1 箇所に集約している（理由は team_memberships.tf 冒頭参照）。
+  # ob-og / alumni はチーム所属を持たない ＝ 台帳の status 変更だけで
+  # 全チームの権限が確実に外れる
   groups = (
     each.value.status == "ob-og" ? [data.authentik_group.ob_og.id] :
     each.value.status == "alumni" ? [] :
-    [data.authentik_group.all_members.id]
+    distinct(concat(
+      [data.authentik_group.all_members.id],
+      try(local.team_groups_by_member[each.key], []),
+    ))
   )
 
   attributes = jsonencode({
     student_id = local.secrets[each.key].student_id
     lcn_id     = each.key             # email 書き換え後も辿れる不変の識別子
     grad_year  = each.value.grad_year # フォルダ移動のたびに再計算される
+
+    # アドオン権限（18-access-control.md「軸 1」）。ロールでは表せない
+    # 個別の権限を Middleware API 等が読むために user attribute として持たせる
+    grants = each.value.status == "active" ? try(local.grants_by_member[each.key], []) : []
   })
 
   lifecycle {
