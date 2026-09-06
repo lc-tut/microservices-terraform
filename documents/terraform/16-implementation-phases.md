@@ -371,9 +371,9 @@ Authentik グループ・Keystone ロールまで一気通貫で反映される�
   GitHub Secrets は GitHub Actions の中でしか読めず、Kubernetes 上で動く
   サービスの取得先にはならないため、[P1] とは別に必要になる
 - `catalog/projects/_template` が apply 時に `kv/app-creds/{project_name}` へ
-  `app_cred_id`・`app_cred_secret`・`team_name` を書き込むこと。
-  現在の `_template` は `team_name` 変数を持たず Vault にも書かないため、
-  Phase 6 着手前に追加する
+  `app_cred_id`・`app_cred_secret` を書き込むこと。
+  現在の `_template` は Vault に書かないため、Phase 6 着手前に追加する
+  （所属とロールはグループ名から得るため、`team_name` は不要）
 
 **作業内容**:
 

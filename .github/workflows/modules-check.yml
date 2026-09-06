@@ -24,6 +24,29 @@ jobs:
             | jq -R -s -c 'split("\n")[:-1]')
           echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
 
+  # modules/ 配下の terraform test。provider を持たないモジュールの
+  # 契約（グループ名の命名規則など）を固定する。認証情報を必要としないため
+  # plan-all とは独立に、stack が無いときでも必ず走らせる。
+  module-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+
+      - name: terraform test
+        run: |
+          failed=0
+          for dir in $(find terraform/modules -type d -name tests | sort); do
+            mod="$(dirname "$dir")"
+            echo "::group::$mod"
+            (cd "$mod" && terraform init -backend=false -no-color && terraform test -no-color) || failed=1
+            echo "::endgroup::"
+          done
+          exit $failed
+
   plan-all:
     needs: detect-stacks
     if: needs.detect-stacks.outputs.stacks != '[]'

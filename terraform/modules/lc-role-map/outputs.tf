@@ -19,6 +19,11 @@ output "grants" {
 }
 
 output "group_names" {
+  # 注意: この命名規則は lcn-infra-api との契約になっている。
+  # 同 API は X-authentik-groups に入ってくる "team-web-member" という文字列を
+  # 分解して「web チームの member」と判定しており、判断材料はこれしかない。
+  # prefix・区切り文字・並び順を変えると Terraform 側は何も壊れないまま
+  # API の認可だけが黙って壊れる。変更するときは lcn-infra-api も同時に直すこと。
   value = {
     for r in ["owner", "member", "viewer"] :
     r => "${local.prefix}-${var.scope_name}-${r}"
@@ -26,6 +31,7 @@ output "group_names" {
   description = <<-EOT
     Authentik / Keystone で共通に使うグループ名（例: team-infra-owner）。
     Keystone federation mapping はこの名前で Authentik のグループクレームを写す。
+    lcn-infra-api もこの名前を解析して所属とロールを導出する（上記コメント参照）。
   EOT
 }
 

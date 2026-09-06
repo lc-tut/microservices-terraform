@@ -18,4 +18,15 @@ variable "scope_name" {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.scope_name))
     error_message = "scope_name は英小文字・数字・ハイフンのみ（先頭末尾はハイフン不可）で指定してください。"
   }
+
+  validation {
+    # グループ名は "<prefix>-<scope_name>-<role>" で組み立てるため、
+    # scope_name がロール名で終わると "team-foo-owner-member" のような
+    # 紛らわしい名前になる。末尾のハイフンで分割すれば一意に解釈できるので
+    # 完全な衝突は起きないが、lcn-infra-api 側が素朴に分割した場合に
+    # 誤判定しうる。実際のチーム名は web / infra なので実害はなく、
+    # 名前空間を素直に保つための予防措置。
+    condition     = !can(regex("-(owner|member|viewer)$", var.scope_name))
+    error_message = "scope_name の末尾に -owner / -member / -viewer は使えません（グループ名のロール部分と紛らわしいため）。"
+  }
 }

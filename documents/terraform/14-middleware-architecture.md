@@ -267,40 +267,55 @@ URL の `{project}` は **`catalog/projects/<name>/` のワークスペース名
 別物です。1つのワークスペースの VM 操作は、そのワークスペースが属する
 チームの Keystone project に対して行われます。
 
-infra-api は「このワークスペースを操作してよいか」を判定するために
-「このワークスペースはどのチームのものか」を知る必要があります。
-これは Application Credential を取り出す Vault の読み取りに相乗りさせます。
+ワークスペースを操作してよいかは `proj-{project}-{role}` グループの有無で
+判定します（次節）。Vault から読むのは OpenStack を実際に呼ぶための
+Application Credential だけです。
 
 ```text
 kv/app-creds/{project}   （project = ワークスペース名）
   app_cred_id
   app_cred_secret
-  team_name        ← このワークスペースを所有するチーム名（認可判定に使う）
 ```
 
-`catalog/projects/<name>/` の Terraform apply 時に、Application
-Credential の発行と同じタイミングでこの `team_name` も一緒に Vault へ
-書き込みます（`var.team_name` を新たに入力変数として追加する必要があります。
-現状の `catalog/projects/_template/variables.tf` は `team_project_id`
-のみで、`team_name` を独立して持っていないため）。
+これは `catalog/projects/<name>/` の Terraform apply 時に、Application
+Credential の発行と同じタイミングで書き込みます。
 
 ### 認可の判定方法（infra-api・k8s-api）
 
+`X-authentik-groups` に入ってくるグループ名を解析して、所属とロールを
+導出します。外部への問い合わせは発生しません。
+
 ```text
-1. Vault の kv/app-creds/{project} を読む（Application Credential 取得と共通）
-2. team_name を取り出す
-3. X-authentik-groups にその team_name が含まれていれば許可
+1. X-authentik-groups を分解する（グループ名は <prefix>-<scope>-<role>）
+2. prefix が team ならチームスコープ、proj ならプロジェクトスコープ
+3. 対象リソースのスコープと一致する所属があり、
+   ロールが要求する操作を満たしていれば許可
 ```
+
+例えば `team-web-member` は「web チームの member」です。`scope` 自体に
+ハイフンが入る（`proj-web-frontend-member`）ため、**ロールは末尾の
+ハイフンで切り出します**。
+
+| ロール | 想定する操作 |
+| --- | --- |
+| `owner` | そのスコープの全操作 |
+| `member` | リソースの作成・変更・削除 |
+| `viewer` | 参照のみ |
 
 Keystone の role assignment を都度解決する必要も、Authentik と Keystone
 の間でトークン交換する必要もありません。実際の OpenStack API 呼び出しは、
-認可判定とは別に、同じ Vault の読み取りで得た Application Credential で
-行います（「infra-api」節「Application Credential の管理」参照）。
+認可判定とは別に、Vault から読み取った Application Credential で行います
+（「infra-api」節「Application Credential の管理」参照）。
 
-> 上記はワークスペース単位の「入れるか入れないか」の二値判定です。
-> 将来 member/reader のようなロール粒度で制御したくなったら、
-> ユーザー自身の Keystone federation スコープ済みトークンを都度取得して
-> それで OpenStack を呼ぶ方式に切り替えます。
+> **この命名規則は Terraform と API をまたぐ契約です。**
+> 名前を生成しているのは `modules/lc-role-map` の `group_names` 出力で、
+> そこが唯一の正です（`18-access-control.md`）。prefix・区切り文字・
+> 並び順・ロール語彙を変えると、Terraform 側は何も壊れないまま API の
+> 認可だけが黙って壊れます。
+>
+> これを検知するため、`modules/lc-role-map/tests/group_names.tftest.hcl`
+> が形式を固定しており、変更すると `modules-check.yml` の CI が落ちます。
+> 意図的に変える場合は、このテストと API 側を同じタイミングで直してください。
 
 ### billing-api の認可: 請求アカウントに紐づく「リンク」を見る
 
@@ -317,11 +332,10 @@ Namespace の費用を見るか」を直接指定します（次節「billing-ap
 
 ```text
 billing_account_links に以下のいずれかが存在すれば許可:
-  link_type = "user" かつ link_ref == X-authentik-username
-  link_type = "team" かつ link_ref が X-authentik-groups に含まれる
-  link_type = "project" かつ、そのワークスペースの所有チーム
-    （kv/app-creds/{link_ref}.team_name。infra-api と同じ仕組みを再利用）
-    が X-authentik-groups に含まれる
+  link_type = "user"    かつ link_ref == X-authentik-username
+  link_type = "team"    かつ X-authentik-groups に team-{link_ref}-{role} がある
+  link_type = "project" かつ X-authentik-groups に proj-{link_ref}-{role} がある
+（role は owner / member / viewer のいずれか。infra-api と同じ解析を使う）
 ```
 
 `GET /api/billing/me/accounts`（自分がアクセスできる請求アカウント一覧）は
@@ -403,7 +417,7 @@ OpenStack の操作を担当します。内部はドメインごとにモジュ�
 
 ```text
 infra-api/
-  ├─ authz/       # X-authentik-* ヘッダーの読み取り・Vault kv/app-creds/{project} 経由の認可判定
+  ├─ authz/       # X-authentik-* ヘッダーの読み取り・グループ名からの所属/ロール導出
   ├─ compute/     # Nova VM・Cinder ボリューム
   ├─ network/     # Neutron SG・Floating IP・Designate DNS
   ├─ storage/     # Swift・Manila
@@ -887,16 +901,14 @@ plan の段階でブロックされるので、PR を作った時点で「予算
 
 ### 前提として `catalog/projects/_template` に必要な追加
 
-「チーム・プロジェクト・Namespace の対応関係」節で触れたとおり、
-infra-api・k8s-api の認可判定は `kv/app-creds/{workspace}` に書き込まれた
-`team_name` を読みます。現状の `catalog/projects/_template/variables.tf`
-は `team_project_id` のみで `team_name` を単独では持っていないため、
-billing-api・infra-api・k8s-api の実装に先立って、以下を
-`catalog/projects/_template` に追加する必要があります。
+infra-api は OpenStack を呼ぶときにワークスペースごとの Application
+Credential を Vault から読みます。現状の `catalog/projects/_template` は
+Application Credential を作るところまでで、Vault への書き込みを行いません。
+Phase 6 着手前に、apply 時に `kv/app-creds/{project_name}` へ
+`app_cred_id`・`app_cred_secret` を書き込む処理を追加する必要があります。
 
-- 入力変数 `team_name`（`team_project_id` とは別に追加）
-- apply 時に Vault へ `kv/app-creds/{project_name}` を書き込む処理
-  （`app_cred_id`・`app_cred_secret`・`team_name` の3点）
+認可判定に使う所属とロールはグループ名から得るため（「認可の判定方法」節）、
+Vault に `team_name` を持たせる必要はありません。
 
 これは `16-implementation-phases.md` Phase 6（Middleware API）着手前に
 済ませておく `catalog/` 側の前提整備です。
