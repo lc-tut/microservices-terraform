@@ -1,15 +1,9 @@
+# state は GCS バケット linuxclub-network-cloud-terraform-state（GCP プロジェクト
+# main-vcompute）に置く。state のロックは GCS backend が .tflock オブジェクトの
+# 排他作成で行うため、S3 backend の use_lockfile に相当する設定は要らない。
 terraform {
-  backend "s3" {
-    bucket = "linuxclub-tfstate"
-    key    = "tfstate/terraform/platform/openstack/cloudkitty/terraform.tfstate"
-    region = "us-east-1"
-
-    use_lockfile = true
-
-    use_path_style              = true
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
+  backend "gcs" {
+    bucket = "linuxclub-network-cloud-terraform-state"
+    prefix = "tfstate/terraform/platform/openstack/cloudkitty"
   }
 }

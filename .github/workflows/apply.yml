@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  # GCS backend への Workload Identity 連携で OIDC トークンを発行するのに必要
+  id-token: write
 
 jobs:
   detect-changes:
@@ -89,6 +91,14 @@ jobs:
         with:
           terraform_version: "~1.10"
 
+      # state 置き場の GCS バケットへ Workload Identity 連携で認証する。
+      # サービスアカウントキーは発行しない（鍵の持ち回りが要らない）。
+      - name: GCP 認証
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/897661050223/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: github-actions-tfstate@main-vcompute.iam.gserviceaccount.com
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -118,9 +128,6 @@ jobs:
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
-          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -147,6 +154,14 @@ jobs:
         with:
           terraform_version: "~1.10"
 
+      # state 置き場の GCS バケットへ Workload Identity 連携で認証する。
+      # サービスアカウントキーは発行しない（鍵の持ち回りが要らない）。
+      - name: GCP 認証
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/897661050223/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: github-actions-tfstate@main-vcompute.iam.gserviceaccount.com
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -164,9 +179,6 @@ jobs:
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
-          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -193,6 +205,14 @@ jobs:
         with:
           terraform_version: "~1.10"
 
+      # state 置き場の GCS バケットへ Workload Identity 連携で認証する。
+      # サービスアカウントキーは発行しない（鍵の持ち回りが要らない）。
+      - name: GCP 認証
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/897661050223/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: github-actions-tfstate@main-vcompute.iam.gserviceaccount.com
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -210,9 +230,6 @@ jobs:
           OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.LC_CLOUD_APP_CRED_ID }}
           OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.LC_CLOUD_APP_CRED_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GH_TERRAFORM_TOKEN }}
-          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
@@ -244,6 +261,14 @@ jobs:
         with:
           terraform_version: "~1.10"
 
+      # state 置き場の GCS バケットへ Workload Identity 連携で認証する。
+      # サービスアカウントキーは発行しない（鍵の持ち回りが要らない）。
+      - name: GCP 認証
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/897661050223/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: github-actions-tfstate@main-vcompute.iam.gserviceaccount.com
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -263,9 +288,6 @@ jobs:
           OS_APPLICATION_CREDENTIAL_SECRET: >-
             ${{ secrets[format('LC_CLOUD_APP_CRED_SECRET_{0}',
               steps.project.outputs.name)] }}
-          AWS_ENDPOINT_URL_S3: ${{ secrets.CEPH_RGW_ENDPOINT }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.CEPH_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CEPH_SECRET_ACCESS_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve
