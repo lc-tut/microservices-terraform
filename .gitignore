@@ -73,7 +73,8 @@ local/.secrets
 local/.act.env
 local/vault/.env
 # 共有相手に渡す認証情報の受け渡し用（コミットしない）
-local/handover/
+# 圧縮して渡すことがあるため handover* で拾う
+local/handover*
 .envrc
 
 # SOPS 復号後の平文（絶対に含めない）
