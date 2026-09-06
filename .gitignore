@@ -53,11 +53,17 @@ terraform/local-override.tf
 terraform/platform/infra/idp-infra/.ssh/
 
 # ローカル開発環境の秘密情報
+#
+# **末尾に * を付けて派生ファイルごと無視する。** 名前だけを書いていると
+# clouds.yaml.bak や clouds.yaml.old が追跡対象のままになり、
+# git add -A で認証情報が入る。実際にそうなりかけた（2026-09-07）。
+# .example だけは共有したいので、下で打ち消している。
 local/authentik/.env
 local/.env
-local/clouds.yaml
-# Polaris 実機のアクセス情報・秘密鍵（コントロールノード SSH / admin パスワード等）
-local/polaris-access.md
+local/clouds.yaml*
+!local/clouds.yaml.example
+# 実機のアクセス情報・秘密鍵（コントロールノード SSH / admin パスワード等）
+local/polaris-access.md*
 local/polaris/
 
 # CloudKitty 基盤 VM の SSH 秘密鍵（idp-infra と同じ方針。設定自体は
