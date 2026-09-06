@@ -22,9 +22,26 @@ variable "instance_name" {
 }
 
 variable "machine_type" {
-  description = "VM マシンタイプ（DevStack + Harbor 同居のため最低でも 16GB メモリを推奨）"
+  description = <<-EOT
+    VM マシンタイプ（DevStack + Harbor 同居のため最低でも 16GB メモリを推奨）。
+    E2 系はネステッド仮想化に非対応で /dev/kvm が使えないため、
+    Trove のような重いゲストイメージを起動する検証ができない。
+    そのため N2 系を既定にしている（enable_nested_virtualization も参照）。
+  EOT
   type        = string
-  default     = "e2-standard-4"
+  default     = "n2-standard-4"
+}
+
+variable "enable_nested_virtualization" {
+  description = <<-EOT
+    ネステッド仮想化。DevStack の Nova が建てる VM を KVM で動かすために必要。
+    false にすると Nova は virt_type=qemu になり、cirros 程度の軽いゲスト
+    （lc-vm の検証）は動くが、Trove のゲストイメージ（Ubuntu + Docker で
+    約 1.4GB）は起動しきらず ERROR になる。
+    有効にできるのは N1/N2/N2D/C2 等のみで、E2 では apply が失敗する。
+  EOT
+  type        = bool
+  default     = true
 }
 
 variable "boot_disk_image" {

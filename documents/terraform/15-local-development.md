@@ -87,6 +87,11 @@ terraform apply
 自動インストールします（`stack.sh` に時間がかかるため 20〜40 分程度）。
 進捗は VM 上の `/var/log/gcp-devstack-bootstrap.log` で確認できます。
 
+構築されるのは Keystone / Nova / Neutron / Glance / Placement / Horizon /
+Cinder / Swift に加えて、CloudKitty（Ceilometer + Gnocchi）と
+Trove（Barbican を含む）です。Trove は Cinder と Barbican に依存するため、
+これらを `disable_service` してはいけません。
+
 ```bash
 gcloud compute ssh $(terraform output -raw instance_name) \
   --tunnel-through-iap --zone=$(terraform output -raw zone) \
@@ -110,6 +115,51 @@ gcloud compute ssh $(terraform output -raw instance_name) \
 > `stack.sh` が `dpkg was interrupted` 等で異常終了した場合は
 > `sudo fuser /var/lib/dpkg/lock-frontend /var/cache/debconf/config.dat` で
 > ロック保持プロセスを特定し、`sudo dpkg --configure -a` で修復してから再実行する。
+
+### `stack.sh` が途中で終わったあとの復旧
+
+`stack.sh` が最後まで通らずに終わると、OpenStack は「サービスは動いているが
+設定の一部が書かれていない」という中途半端な状態で残ります。
+
+このとき **`stack.sh` をそのまま再実行してはいけません。** 再実行は各サービスの
+DB を作り直す一方で、起動済みのサービスは再起動せずに使い回すため、
+「DB は空なのにプロセスは古い状態のまま」という、元の失敗とは無関係な
+新しいエラーを生みます（下表の geneve の例）。原因の切り分けが二重に
+難しくなるだけなので、必ずクリーン構築からやり直してください。
+
+```bash
+cd /opt/stack/devstack
+./unstack.sh && ./clean.sh && ./stack.sh
+```
+
+クリーン構築の前にも次の2つは消しておきます。CloudKitty の devstack
+プラグインは Horizon への symlink 作成に `ln -s` を `-f` なしで使っており、
+`unstack.sh` は Horizon の `enabled/` を掃除しないため、残っていると
+"File exists" で落ちます。さらにこの失敗が devstack 本体の非同期ジョブ
+待ち合わせ（`async_wait`）をデッドロックさせ、`stack.sh` が終了しないまま
+止まります。
+
+```bash
+sudo rm -f /opt/stack/horizon/openstack_dashboard/enabled/_32*.py
+sudo rm -rf /opt/stack/async
+```
+
+症状から原因が読み取りにくいものを挙げます。
+
+| 症状 | 原因 | 対処 |
+| --- | --- | --- |
+| `stack.sh` が `503 No project network is available for allocation` で失敗する | 再実行が neutron の DB を作り直して `ml2_geneve_allocations` を空にする一方、起動済みの neutron-server はそのまま使い回されるため、割り当てが二度と同期されない。**`stack.sh` の再実行でのみ起きる**（クリーン構築では起きない） | `sudo systemctl restart devstack@neutron-api devstack@neutron-rpc-server` で同期させてから再実行する。根本的には `unstack.sh` + `clean.sh` からやり直す |
+| `devstack@n-cond-cell1` が `MissingAuthPlugin: An auth plugin is required to determine endpoint URL` で起動しない | `/etc/nova/nova_cell1.conf` の `[placement]` が空（`nova.conf` にはある） | `nova.conf` の `[placement]` セクションを `nova_cell1.conf` へ転記して再起動 |
+| `openstack hypervisor list` が空。VM を作ってもスケジュールされない | compute ホストが cell_v2 に未登録 | `sudo nova-manage cell_v2 discover_hosts --verbose` |
+| Trove のゲストイメージ登録が `413 Request Entity Too Large` で失敗する | Glance のバックエンドである Swift の `max_file_size` が 1GiB で、ゲストイメージ（約 1.4GiB）が収まらない | `local.conf` に `SWIFT_MAX_FILE_SIZE=5368709122` を入れて再構築する（応急処置なら `/etc/swift/swift.conf` の `max_file_size` を書き換えて `devstack@s-*` を再起動） |
+| インスタンスが `MaxRetriesExceeded` で ERROR になり、n-cpu のログに `Could not access KVM kernel module: Permission denied` が出る | `/dev/kvm` のグループが `kvm` ではなく `render` になっている（kvm モジュールが遅延ロードされ udev ルールが正しく当たらなかった）。`libvirt-qemu` は `kvm` グループにしか属さないためアクセスできない | `sudo chown root:kvm /dev/kvm && sudo chmod 660 /dev/kvm` して `devstack@n-cpu` を再起動。恒久対処は bootstrap が入れている `/etc/modules-load.d/kvm.conf` と `/etc/udev/rules.d/99-kvm.rules` |
+| インスタンスが ERROR になり、Nova 側は ACTIVE なのにコンソールログが 0 行のまま | ネステッド仮想化が無効で `virt_type=qemu`（エミュレーション）になっている。cirros は起動するが Trove のゲストは起動しきらない | `machine_type` を N2 系にし `enable_nested_virtualization = true` で VM を作り直す。`/dev/kvm` の有無と `virt_type` で判別できる |
+| Trove インスタンスが `BUILD` のまま進まず、guest-agent のログに `Connection failed: timed out`（RabbitMQ）が並ぶ | ゲストは mgmt 網にしかいないのに guest-agent の接続先が br-ex 上の `172.24.4.1` になっている。加えて `trove-mgmt` のセキュリティグループが 22 と ICMP しか許可していない | `/etc/trove/trove-guestagent.conf` の `transport_url` をホストの mgmt 側 IP に向け、SG に 5672 の ingress を追加する（bootstrap が実施済み）|
+| Trove インスタンスが `Service not active, status: failed to spawn` で ERROR。ゲストに docker イメージが無い | ゲストが MySQL イメージを取得できていない。ゲスト内の `ens3` は `networking.service` の失敗で落ちるため、mgmt 網に経路がないと外に出られない。さらに Docker が `FORWARD` の既定ポリシーを DROP にするため br-ex 経由の転送も落ちる | mgmt サブネットにゲートウェイを設定して router に接続し、サブネットに DNS を設定する。ホスト側は `iptables -I FORWARD 1 -i br-ex -j ACCEPT`（`-o` も）を入れる（いずれも bootstrap が実施済み）|
+
+> ゲスト内の `ens3`（テナント網側）が `networking.service` の失敗で落ちる問題は
+> ゲストイメージ側の作りに起因します。mgmt 網にルーティングを持たせておけば
+> 影響を受けないため、イメージの作り直しはしていません。
 
 ### 接続設定（IAP トンネル + clouds.yaml）
 
@@ -537,17 +587,26 @@ gcloud compute ssh devstack-harbor --tunnel-through-iap --zone=<zone> \
 IAP トンネル（`start-tunnels.sh`）を閉じると SSH 接続が切れ、30 分後に
 VM が自動停止します。作業中はトンネルを開いたままにしてください。
 
-> **既知の弱点（実機で発生確認済み・2026-09-01）**: 判定は
-> `ss -tn state established '( sport = :22 )'` の**その瞬間のスナップショット**
-> なので、`gcloud compute ssh --command=...` を都度短時間だけ接続しては切る、
-> という使い方（自動化スクリプトからの定期ポーリング等）を続けていると、
-> 5分ごとのチェックタイミングでたまたま接続が確立していない瞬間が続き、
-> 実際には作業中でも「アイドル」と誤判定されて VM ごと電源断することがある。
-> 長時間かかる処理（`stack.sh` の再実行等）を走らせる間は、
-> `sudo systemctl stop idle-shutdown.timer && sudo systemctl mask idle-shutdown.timer`
-> で一時的に無効化し、作業後に
-> `sudo systemctl unmask idle-shutdown.timer && sudo systemctl enable --now idle-shutdown.timer`
-> で元に戻すこと。
+判定は `ss -tn state established '( sport = :22 )'` の**その瞬間のスナップショット**
+です。`gcloud compute ssh --command=...` で都度短時間だけ接続しては切る使い方
+（自動化スクリプトからの定期ポーリング等）を続けると、5分ごとのチェック
+タイミングでたまたま接続が無い瞬間が重なり、作業中でもアイドルと判定されます。
+これを避けるため、`idle-shutdown.sh` は次の2つの場合は停止をスキップします。
+
+- `stack.sh` / `unstack.sh` が動いている（`pgrep` で判定）
+- `/run/no-idle-shutdown` が存在する
+
+そのため `stack.sh` の再実行中に電源断されることはありません。それ以外の
+長時間処理を保護したいときは抑止ファイルを使います。
+
+```bash
+sudo touch /run/no-idle-shutdown   # 保護する
+sudo rm /run/no-idle-shutdown      # 解除する（消し忘れると停止しなくなる）
+```
+
+タイマー自体を止めたい場合は
+`sudo systemctl disable --now idle-shutdown.timer`、戻すときは
+`sudo systemctl enable --now idle-shutdown.timer` です。
 
 ### PC 側（補助）
 

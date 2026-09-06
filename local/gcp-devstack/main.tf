@@ -79,6 +79,13 @@ resource "google_compute_instance" "devstack" {
   # マシンタイプ変更等でも VM 自体は保持できるようにしておく
   allow_stopping_for_update = true
 
+  # DevStack の Nova が VM を建てるので、この VM の中でさらに仮想化する
+  # 必要がある。無効だと /dev/kvm が現れず Nova は virt_type=qemu
+  # （ソフトウェアエミュレーション）になり、cirros 程度しか起動できない
+  advanced_machine_features {
+    enable_nested_virtualization = var.enable_nested_virtualization
+  }
+
   boot_disk {
     initialize_params {
       image = var.boot_disk_image
