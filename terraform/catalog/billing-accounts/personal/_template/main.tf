@@ -7,12 +7,15 @@
 # ここでは素の Keystone project 参照 + クォータ設定のみを行う。
 # 予算・Credit 残高の管理は Phase 6 以降の課題（16-implementation-phases.md）。
 #
-# 前提の注記: 個人 OpenStack project の自動作成（メンバー入会時）自体、
-# 現状 `platform/members/` に実装が無い（08-billing.md が書く「SCIM 連携」も
-# 実際には廃止済み・未代替。16-implementation-phases.md [P2] 参照）。
-# そのため下記の data lookup は、対応する project が実際に存在する前提でのみ動く。
+# 個人 project の実体は `platform/members/` が台帳から作る。ここはその
+# project のクォータを既定から変えたい人だけが作る任意のディレクトリ。
+#
+# name だけで引くと、同名の project が別 domain にあった場合にそちらを
+# 引き当てて、無関係な project のクォータを書き換えてしまう。
+# domain_id を必ず指定すること。
 data "openstack_identity_project_v3" "this" {
-  name = var.username
+  name      = "user-${replace(var.lcn_id, "_", "-")}"
+  domain_id = "default"
 }
 
 module "quota" {

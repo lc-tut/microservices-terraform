@@ -5,8 +5,13 @@
 # （08-billing.md 参照、未着手）。そのため、ここでは Organization を経由せず
 # 素の Keystone project + クォータ設定のみを行う（[P3] を参照・更新。
 # 16-implementation-phases.md）。予算・Credit 残高の管理は Phase 6 以降の課題。
+# project 名に team- を付けるのは、個人 project（user-<lcn_id>）と
+# 名前空間を分けるため。チーム名とユーザー名は文字種の制約が同じで、
+# 接頭辞が無いと同じ domain の中で衝突しうる。
+# 参照はほぼ project ID 経由なので、この名前を消費するのは
+# catalog/billing-accounts/{teams,personal}/ の data lookup だけ。
 resource "openstack_identity_project_v3" "this" {
-  name        = var.team_name
+  name        = "team-${var.team_name}"
   domain_id   = "default"
   description = "LC-Cloud team: ${var.team_name}"
   enabled     = true

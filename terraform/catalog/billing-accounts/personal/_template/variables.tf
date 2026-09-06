@@ -4,9 +4,19 @@ variable "os_cloud" {
   default     = "polaris-admin"
 }
 
-variable "username" {
+variable "lcn_id" {
   type        = string
-  description = "個人 OpenStack project 名（プロジェクト作成の運用規約: 1人1project、project名=username を前提とする。ただし個人project自動作成自体は未実装、README参照）"
+  description = <<-EOT
+    メンバーの不変識別子（platform/members/ の台帳のキー。例 lcn_9a2bb6e30171）。
+    username ではなく lcn_id を使うのは、username は本人が enrollment 後に
+    変更でき、Terraform も ignore_changes で追随しないため。username を
+    キーにすると、改名した時点で project 名と実体がずれる。
+  EOT
+
+  validation {
+    condition     = can(regex("^lcn_[0-9a-f]{12}$", var.lcn_id))
+    error_message = "lcn_id は lcn_ + 12桁の小文字16進で指定してください（例 lcn_9a2bb6e30171）。"
+  }
 }
 
 variable "quota_tier" {

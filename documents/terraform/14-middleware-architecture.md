@@ -231,8 +231,8 @@ infra-api・k8s-api・billing-api の認可とデータモデルは、既存の
 
 ```text
 catalog/teams/<team>/          ← 1チーム = 1 Keystone project + 1 Authentik group
-  openstack_identity_project_v3.this.name  = var.team_name
-  authentik_group.this.name                = var.team_name   （同じ名前）
+  openstack_identity_project_v3.this.name  = "team-${var.team_name}"
+  authentik_group.this.name                = var.team_name
   module.quota                              ← クォータはここに設定する
                                                （CloudKitty の OpenStack 側コストも
                                                この Keystone project 単位でしか測れない）
@@ -332,7 +332,7 @@ Namespace の費用を見るか」を直接指定します（次節「billing-ap
 
 ```text
 billing_account_links に以下のいずれかが存在すれば許可:
-  link_type = "user"    かつ link_ref == X-authentik-username
+  link_type = "user"    かつ X-authentik-groups に user-{link_ref}-owner がある
   link_type = "team"    かつ X-authentik-groups に team-{link_ref}-{role} がある
   link_type = "project" かつ X-authentik-groups に proj-{link_ref}-{role} がある
 （role は owner / member / viewer のいずれか。infra-api と同じ解析を使う）
@@ -693,7 +693,8 @@ billing_account_links       -- 管理・閲覧リンク（認可判定に使う�
   link_type                  -- team | project | user
   link_ref                    -- team_name（catalog/teams の名前）
                               -- project_name（catalog/projects のワークスペース名）
-                              -- authentik user id
+                              -- lcn_id（メンバー台帳のキー。username は本人が
+                                 変更できるため使わない）
                               -- のいずれか
 
 cost_cache                    -- 集計結果のキャッシュ（生データは CloudKitty 側が一次情報）
@@ -818,12 +819,11 @@ infra-api・k8s-api 側で短時間（数十秒程度）キャッシュし、bil
 
 ### Terraform 連携
 
-`08-billing.md`/`09-costs.md` が仕様として書いていた `lc_cloud_organization`・
-`lc_cloud_budget` は、`modules/cloudkitty-service` と同じ手法
+請求アカウントは `modules/cloudkitty-service` と同じ手法
 （`Mastercard/terraform-provider-restapi` で billing-api 自身の管理用
-API を叩く）で実装します。「チーム・プロジェクトの下に請求アカウントが
-ぶら下がる」のではなく、逆に**請求アカウント側が対象を指定する**形に
-そのまま対応します。
+API を叩く）で宣言します。「チーム・プロジェクトの下に請求アカウントが
+ぶら下がる」のではなく、**請求アカウント側が対象を指定する**形をそのまま
+Terraform でも表現します。
 
 ```hcl
 # terraform/modules/lc-cloud-organization/main.tf
@@ -860,10 +860,7 @@ resource "restapi_object" "account_link" {
 }
 ```
 
-`catalog/billing-accounts/` の `data "lc_cloud_organization"` /
-`resource "lc_cloud_budget"` は、この `modules/lc-cloud-organization`
-経由の呼び出しに差し替えます。呼び出し元（`catalog/billing-accounts/teams/<name>/`
-等）は「どの OpenStack project・Namespace を課金対象にするか」
+呼び出し元（`catalog/billing-accounts/teams/<name>/` 等）は「どの OpenStack project・Namespace を課金対象にするか」
 （`var.resources`）と「どのチーム・プロジェクト・ユーザーに見せるか」
 （`var.links`）を明示的に渡します。billing-api 側が「チーム配下の
 ワークスペースを自動的に発見する」仕組みは持たず、対象は常に

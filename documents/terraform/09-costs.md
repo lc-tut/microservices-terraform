@@ -94,26 +94,19 @@ CMU Campus Cloud などの学術クラウドの SU（Service Unit）設計を参
 
 ## Terraform 実装
 
-> **注意（実装との乖離）**:
->
-> - `openstack_rating_hashmap_service_v1`/`_field_v1`/`_mapping_v1` は
->   **どの Terraform Provider にも存在しません**。実際は
->   `terraform/modules/cloudkitty-service/`（`Mastercard/terraform-provider-restapi`
->   経由で CloudKitty の Hashmap API を直接叩く方式）を使います。
->   `terraform/platform/openstack/cloudkitty/` で実装し、apply・`plan` clean・
->   API GET での確認まで済んでいます（実機での検証内容・罠は
->   `terraform/modules/cloudkitty-service/main.tf` と
->   `terraform/platform/openstack/cloudkitty/README.md` 参照）。
-> - `lc_cloud_budget`（下記「予算リソース」節）も存在しません。CloudKitty には
->   「複数のコスト源を横断して合算し、予算と比較する」機能自体が無く、
->   OpenStack 標準機能にも相当するものはありません。「Organization 単位での予算管理」は
->   まるごと自前実装が必要な未着手の課題です（今回のスコープ外）。
-> - CloudKitty の `collector`・`scope_attribute` はいずれも **1 インスタンスにつき 1 つ**
->   しか設定できないため、OpenStack 用と Kubernetes 用は別インスタンスにします
->   （`documents/terraform/16-implementation-phases.md`「[P5]」参照）。
->   実機の collector 種別・基盤構成は環境ごとに異なりうるため、実際に採用した
->   collector とその理由は `terraform/platform/infra/cloudkitty-infra/README.md`
->   （基盤側）を参照してください。
+CloudKitty の Hashmap ルールは `modules/cloudkitty-service`
+（`Mastercard/terraform-provider-restapi` 経由で CloudKitty の API を直接叩く）で
+宣言します。専用の Terraform provider は無いためこの方式を採っています。
+実装は `platform/openstack/cloudkitty/` にあります。
+
+CloudKitty の `collector`・`scope_attribute` は 1 インスタンスにつき 1 つしか
+設定できないため、OpenStack 用と Kubernetes 用は別インスタンスとして立てます。
+採用した collector とその理由は `platform/infra/cloudkitty-infra/README.md`
+を参照してください。
+
+予算の管理（複数のコスト源の合算・80% / 100% の判定）は CloudKitty の担当
+範囲外で、**billing-api** が行います。設計は `14-middleware-architecture.md`
+にあります。
 
 ### CloudKitty 単価設定（terraform/platform/openstack/cloudkitty/main.tf）
 
@@ -160,28 +153,15 @@ module "floating_ip" {
 > フレーバー別など「メタデータの値ごとに単価を変えたい」場合は同じモジュールの
 > **field モード**（`field_name = "flavor_id"` + `mappings = { ... }`）を使う。
 
-### 予算リソース（catalog/billing-accounts/ で参照）
+### 予算の宣言
 
-```hcl
-# modules/lc-cloud-quota/budget.tf
-resource "lc_cloud_budget" "this" {
-  count           = var.budget_limit != null ? 1 : 0
-  organization_id = var.organization_id
-  limit_credits   = var.budget_limit
+予算は Keystone にも CloudKitty にも置き場が無いため、billing-api が自分の DB
+で持ちます。Terraform からは `modules/lc-cloud-organization`
+（`restapi` provider で billing-api の管理用 API を叩く）で宣言します。
+請求アカウントがどの project・Namespace を課金対象にするかもここで指定します。
+詳しくは `14-middleware-architecture.md`「Terraform 連携」を参照してください。
 
-  alert_thresholds = [
-    {
-      percent  = 80
-      action   = "notify"
-      webhook  = var.discord_webhook_url
-    },
-    {
-      percent  = 100
-      action   = "block_create"
-    }
-  ]
-}
-```
+`catalog/billing-accounts/` が扱うのはクォータの上書きだけです。
 
 ---
 
@@ -190,16 +170,16 @@ resource "lc_cloud_budget" "this" {
 ### 増額申請
 
 ```text
-1. catalog/billing-accounts/<type>/<name>/ にエントリを作成（初回）
-   または既存エントリの budget_limit を変更
+1. 請求アカウントの budget_limit_credits を変更
 2. PR → lc-cloud-infra または circle-admin が承認
-3. apply → CloudKitty の予算が更新される
+3. apply → billing-api の DB が更新される
 ```
 
 ### デフォルト予算の全体変更
 
 ```text
-1. 08-billing.md の変数デフォルト値を変更（設計文書）
-2. modules/lc-cloud-quota/budget.tf の default を変更
-3. platform/openstack/quotas/ を apply → 全アカウントのデフォルト予算に反映
+1. 08-billing.md のデフォルト値の記述を変更
+2. modules/lc-cloud-organization の budget_limit_credits の default を変更
+3. 既存の請求アカウントには自動では反映されないため、
+   変更したいアカウントを個別に apply する
 ```

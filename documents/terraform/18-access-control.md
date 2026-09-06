@@ -182,6 +182,38 @@ flowchart TD
 **降格は書けるが、昇格はチーム owner の承認が要る**——という非対称を
 CODEOWNERS のファイル分割で担保します（次節）。
 
+### user スコープ（個人 project）
+
+上の 3 スコープとは独立して、メンバー 1 人につき 1 つの個人 project があります。
+チームに属さなくても自分の検証環境を持てるようにするためのもので、
+継承関係を持ちません。
+
+| | 値 |
+| --- | --- |
+| Keystone project | `user-<lcn_id>` |
+| グループ | `user-<lcn_id>-owner` の 1 つだけ |
+| 宣言ファイル | 無し。`platform/members/` の台帳から自動で作られる |
+| 作られるもの | project・クォータ（`lc-micro`）・グループ・ロール付与 |
+
+宣言ファイルを持たないのは、個人 project が台帳の関数だからです。
+`active` なメンバー全員に 1 つずつ作られ、`ob-og` / `alumni` に移せば
+project ごと消えます。「台帳の status を変えるだけで権限が外れる」という
+性質がそのまま効きます。
+
+ロールが `owner` だけなのは、1 人しか入らないためです。`owners.yaml` も
+`members.yaml` も持ちません。したがってチームスコープにある
+「owner は 2 人以上」の制約も適用されません。個人 project に関する PR は
+`circle-admin` が代理承認します（`10-roles-and-permissions.md`）。
+
+ネットワークと Application Credential は既定では作りません。外向き通信は
+単一の VPC Gateway router に集約する設計のため人数分の router interface を
+張るとそこが詰まること、Application Credential は 1 つあたり約 40 本の
+access rule を持つことが理由です。必要になった人が個別に申請して足します。
+
+グループ名のキーに username ではなく `lcn_id` を使うのは、username は本人が
+enrollment 後に変更できるためです。username をキーにすると、改名した時点で
+グループ名と実体がずれ、Keystone のロールが外れます。
+
 ---
 
 ## 宣言ファイルの構成
@@ -470,7 +502,7 @@ Phase 4（catalog）と Phase 5（modules）の間に挟まる位置づけです
 | --- | --- |
 | チームごとに独自ロールを定義できるようにする | ロール数がチーム数に比例して増え、写像・監査が破綻する。柔軟性は `grants` と `team.yaml` で足りる |
 | ロールを 4 段階（`owner` / `maintainer` / `member` / `viewer`）にする | Keystone が `member` / `reader` しか持たないため maintainer と member の差が OpenStack 上に出ない。数十人規模のサークルでは 3 つで十分 |
-| 個人単位で Keystone role assignment を張る | フェデレーションユーザーはローカルに存在しない。人数分のリソースが増え、退会時の取りこぼしが起きる |
+| 個人単位で Keystone role assignment を張る | フェデレーションユーザーは Keystone にローカル実体を持たないため、そもそもユーザーにロールを張れない。個人 project でも本人だけが入るグループを作り、そこに張る |
 | Authentik のロール／パーミッション機能を使う | Authentik 内部の管理権限を表現するものであり、Keystone や Harbor の権限とは無関係。写像先にならない |
 | `until` を Terraform で評価して自動失効させる | コード無変更で plan に差分が出る。権限の変化が Git 履歴に残らなくなる |
 | 権限を Middleware API の DB で持つ | Terraform / Git を唯一の真実とする本リポジトリの前提（`01-overview.md` 設計原則 5）と矛盾する |

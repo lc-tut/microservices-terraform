@@ -110,7 +110,7 @@ requests / limits を省略したコンテナに自動注入されるデフォ�
 # 例: lc-small ベースで floatingip だけ増やす
 module "quota" {
   source     = "../../../../modules/lc-cloud-quota"
-  project_id = lc_cloud_organization.this.openstack_project_id
+  project_id = data.openstack_identity_project_v3.this.id
   tier       = "lc-small"
 
   quota_override = {

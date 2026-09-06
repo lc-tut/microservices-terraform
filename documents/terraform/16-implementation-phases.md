@@ -301,6 +301,18 @@ Keystone の role assignment も自動化アカウントにしか張られてお
    ユーザーのグループ所属を書く唯一の口。`catalog/teams/*/` の yaml を
    ファイルとして読み、`authentik_user.groups` にまとめて反映する
 
+1. `terraform/platform/members/personal_projects.tf` の実装 ✅
+   台帳の `active` メンバー全員に個人 project を 1 つずつ作る。
+   Keystone project（`user-<lcn_id>`）・クォータ（`lc-micro`）・
+   本人だけが入るグループ・ロール付与の最小構成。ネットワークと
+   Application Credential は作らない（`18-access-control.md`「user スコープ」）
+
+1. Keystone project 名の名前空間分離 ✅
+   チームを `team-<name>`、個人を `user-<lcn_id>` にした。接頭辞が無いと
+   チーム名とユーザー名が同じ domain の中で衝突する。あわせて
+   `catalog/billing-accounts/` の data lookup に `domain_id` を追加した
+   （名前だけで引くと別 domain の同名 project を引き当てる）
+
 1. `platform/github/` の yaml 走査対応・Harbor・K8s RoleBinding・
    project スコープ・CI ガード — 未着手（`18-access-control.md` の実装ステップ 3 以降）
 

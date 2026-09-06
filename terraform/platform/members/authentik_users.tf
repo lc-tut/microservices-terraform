@@ -30,6 +30,9 @@ resource "authentik_user" "members" {
     distinct(concat(
       [data.authentik_group.all_members.id],
       try(local.team_groups_by_member[each.key], []),
+      # 自分の個人 project の owner グループ（personal_projects.tf）。
+      # active のみ作られるため、ob-og / alumni ではこの分岐に来ない
+      try([authentik_group.personal_owner[each.key].id], []),
     ))
   )
 

@@ -344,11 +344,20 @@ Authentik がユーザーの唯一の管理元となり、Keystone にユーザ�
 
 Keystone 側では federation mapping を設定します（Terraform 管理対象外・OpenStack 管理者が設定）。
 
+グループ名と Keystone project 名はどちらも接頭辞で名前空間を分けています。
+グループ名は `modules/lc-role-map` が生成し、project 名は
+`catalog/teams/`（チーム）と `platform/members/`（個人）が付けます。
+
 ```text
 # Keystone federation mapping の例
-Authentik グループ "team-web" → Keystone プロジェクト "web" の member ロール
-Authentik グループ "all-members" → 全プロジェクトの reader ロール
+Authentik グループ "team-web-member"           → Keystone プロジェクト "team-web" の member ロール
+Authentik グループ "team-web-viewer"           → Keystone プロジェクト "team-web" の reader ロール
+Authentik グループ "user-lcn-9a2bb6e30171-owner" → Keystone プロジェクト "user-lcn-9a2bb6e30171" の member ロール
 ```
+
+> mapping は Terraform 管理外です。グループ名や project 名の規則を変えると
+> Terraform 側は何も壊れないまま、ログインしたユーザーにロールが付かなく
+> なります。規則を変えるときは必ずここも合わせて直してください。
 
 `providers/lc_cloud.tf` の OIDC プロバイダが認証の入り口を担います（前セクション参照）。
 

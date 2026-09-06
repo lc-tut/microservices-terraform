@@ -50,6 +50,37 @@ run "project_scope" {
   }
 }
 
+run "user_scope" {
+  variables {
+    scope_type = "user"
+    # 個人スコープのキーは lcn_id。username は本人が変更できるため使わない
+    # （platform/members/authentik_users.tf の ignore_changes 参照）。
+    # scope_name はアンダースコアを許さないので lcn_xxx → lcn-xxx に正規化する
+    scope_name = "lcn-9a2bb6e30171"
+  }
+
+  assert {
+    condition     = output.group_names["owner"] == "user-lcn-9a2bb6e30171-owner"
+    error_message = "個人スコープのグループ名が user-<lcn_id>-owner ではなくなっている（lcn-infra-api の認可が壊れる）"
+  }
+
+  # prefix を三項演算子で書くと user が proj- に落ちる。これを検知する
+  assert {
+    condition     = !startswith(output.group_names["owner"], "proj-")
+    error_message = "個人スコープが proj- 接頭辞になっている。main.tf の prefixes マップに user が無い可能性がある"
+  }
+
+  assert {
+    condition     = tolist(output.scope_roles) == tolist(["owner"])
+    error_message = "個人スコープのロールが owner だけではない。空の member / viewer グループができる"
+  }
+
+  assert {
+    condition     = output.github_team["owner"] == null
+    error_message = "個人スコープに GitHub Team が割り当てられようとしている"
+  }
+}
+
 run "role_vocabulary" {
   # ロール語彙もグループ名の一部なので、増減すると API 側の解析対象が変わる
   assert {

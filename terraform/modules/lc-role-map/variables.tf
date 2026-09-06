@@ -1,10 +1,13 @@
 variable "scope_type" {
   type        = string
-  description = "権限スコープの種類。team か project（18-access-control.md「スコープと継承」参照）"
+  description = <<-EOT
+    権限スコープの種類。team / project / user（18-access-control.md「スコープと継承」参照）。
+    user は個人 project（1人1つ、本人だけが入る）で、ロールは owner のみ。
+  EOT
 
   validation {
-    condition     = contains(["team", "project"], var.scope_type)
-    error_message = "scope_type は team または project を指定してください。"
+    condition     = contains(["team", "project", "user"], var.scope_type)
+    error_message = "scope_type は team / project / user のいずれかを指定してください。"
   }
 }
 

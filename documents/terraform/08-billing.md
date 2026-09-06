@@ -32,12 +32,23 @@ LC-Cloud 上の請求アカウントはデフォルト設定で自動プロビ�
 
 | 項目 | 内容 |
 |---|---|
-| 作成タイミング | メンバー入会時に SCIM 連携で LC-Cloud プロジェクトを自動作成 |
-| オーナー | Authentik ユーザー ID に紐づく（1人1アカウント） |
-| 共有 | **不可**。他のメンバー・チームからの参照を LC-Cloud 側でブロック |
-| デフォルトクォータ | `lc-micro`（`platform/openstack/quotas/` で設定） |
-| カスタマイズ | `catalog/billing-accounts/personal/<username>/` を作成して PR（管理者承認） |
-| 無効化 | メンバーを `alumni/` に移動した時点で apply → 自動無効化 |
+| 作成タイミング | `platform/members/` が台帳の `active` メンバーから自動作成する |
+| Keystone project 名 | `user-<lcn_id>`（`user-lcn-9a2bb6e30171` のようにハイフン区切り） |
+| オーナー | 本人だけが入る Authentik グループ `user-<lcn_id>-owner` 経由 |
+| 共有 | 不可。1 project に 1 人しか入らない |
+| デフォルトクォータ | `lc-micro` |
+| カスタマイズ | `catalog/billing-accounts/personal/<lcn_id>/` を作成して PR（管理者承認） |
+| 無効化 | 台帳で `ob-og` / `alumni` に移すと project ごと消える |
+
+project 名とグループ名のキーに username ではなく `lcn_id` を使うのは、
+username は本人が enrollment 後に変更できるためです。username をキーにすると
+改名した時点で project 名と実体がずれます。
+
+既定では **Keystone project とクォータ、グループとロール付与だけ**を作ります。
+ネットワークと Application Credential は作りません。外向き通信は単一の
+VPC Gateway router に集約する設計のため人数分の router interface を張ると
+そこが詰まること、Application Credential は 1 つあたり約 40 本の access rule を
+持つことが理由です。個人でネットワークが必要になったら、そのとき申請して足します。
 
 ### チーム請求アカウント
 
@@ -54,216 +65,86 @@ LC-Cloud 上の請求アカウントはデフォルト設定で自動プロビ�
 
 ## 権限モデル
 
-### 個人アカウントの権限
+権限は Authentik グループに張り、Keystone の同名グループへ federation mapping で
+写します。個人にロールを直接張ることはしません（`18-access-control.md`）。
 
-```text
-LC-Cloud (OpenStack)
-  └─ Personal Organization
-       ├─ owner: {authentik_user_id}   ← 本人のみアクセス可
-       └─ shareable: false             ← 他者からの参照を拒否
-```
+| | Keystone project | グループ | 入る人 |
+| --- | --- | --- | --- |
+| 個人 | `user-<lcn_id>` | `user-<lcn_id>-owner` | 本人のみ |
+| チーム | `team-<name>` | `team-<name>-{owner,member,viewer}` | チームのメンバー |
 
-### チームアカウントの権限
+個人 project は 1 人しか入らないため、ロールは `owner` だけです。
+チームは 3 ロールを使い分けます。
 
-```text
-LC-Cloud (OpenStack)
-  └─ Team Organization
-       ├─ members: [team_id, ...]      ← 参照を許可するチーム ID のリスト
-       └─ shareable: true
-```
-
-- `outputs.tf` で `organization_id` を公開し、複数のチーム・プロジェクトが同一アカウントを参照可
-- 各チーム・プロジェクトが参照する請求アカウントは **必ず 1 つ**（`billing_account_id` は単数）
+請求アカウントがどの project を課金対象にするかは、請求アカウント側が
+直接指定します（`14-middleware-architecture.md` の `billing_account_resources`）。
+「チームの下に請求アカウントがぶら下がる」という所有関係ではないため、
+1 つの請求アカウントで複数チームをまとめることも、チーム内のワークスペースだけを
+別会計にすることもできます。
 
 ---
 
 ## Terraform での実装（カスタマイズ時のみ）
 
-> **注意（実装との乖離・2026-09-03 調査）**: `lc_cloud_personal_organization`・
-> `lc_cloud_organization`・`lc_cloud_budget` は**どの Terraform Provider にも
-> 存在しません**。「予算上限・Credit 残高を持つ Organization」という概念自体、
-> Keystone の project にも CloudKitty にも相当する標準機能が無く、まるごと
-> 自前実装が必要です（独自 DB か Middleware API 側での実装を想定。
-> 未着手）。同様に「複数のコスト源（OpenStack・Kubernetes 等）を Organization
-> 単位で合算する」処理も、CloudKitty 自身は行ってくれないため自前実装が必要です。
-> 詳細は `09-costs.md` の同種の注記、および
-> `documents/terraform/16-implementation-phases.md` の
-> 「[P5] CloudKitty の導入方針」を参照してください。
-> 現状 Terraform で実際に操作できるのは CloudKitty の Hashmap レーティング
-> ルール（`terraform/platform/openstack/cloudkitty/`・`modules/cloudkitty-service/`、
-> 実機検証済み）までで、それより上のクォータ設定（`modules/lc-cloud-quota`）は
-> `project_id` があれば動きますが、予算・Organization 周りはこのドキュメントの
-> 設計イメージのみです。
->
-> **CloudKitty がやってくれる範囲 と 自前実装が要る範囲の線引き**:
->
-> | 機能 | CloudKitty で足りる？ | 備考 |
-> |---|---|---|
-> | メトリクス（使用量）×単価＝金額の計算 | ✅ 足りる | Hashmap ルールとして実装・実機検証済み |
-> | OpenStack リソース1種別ごとの金額算出 | ✅ 足りる | `terraform/platform/openstack/cloudkitty/`。採用した collector は環境依存（`terraform/platform/infra/cloudkitty-infra/README.md` 参照） |
-> | Kubernetes namespace 単位の金額算出 | ✅ 足りる（別インスタンスとして） | 未着手。Prometheus collector・`scope_attribute=namespace` |
-> | 「Organization」という概念（project + 予算上限 + Credit残高） | ❌ 自前実装が要る | Keystone project にも CloudKitty にも該当メタデータが無い。独自 DB か Middleware API 側のデータモデルとして持つ想定 |
-> | 複数 CloudKitty インスタンス（OpenStack用・K8s用）の結果を Organization 単位で合算 | ❌ 自前実装が要る | CloudKitty は自分が計算した範囲しか知らず、他インスタンスの結果を横断して見に行く機能が無い。Middleware API 側でのバッチ集計を想定 |
-> | 予算 80% 到達で警告・100% 到達で新規作成ブロック | ❌ 自前実装が要る | CloudKitty の `limit.rate` モジュールは単一インスタンス内・単一メトリクスの制御のみで、複数ソース合算後の判定はできない。Middleware API + OpenStack API 連携で実装する想定 |
-> | K8s namespace ↔ OpenStack project の対応関係の解決 | ❌ 自前実装が要る | CloudKitty はこの対応関係自体を知らない。「1 project = 1 namespace（同名）」等の運用規約をどこかのコードで解決する必要がある（Prometheus の relabel 設定 or Middleware API 側のマッピングテーブル） |
->
-> つまり CloudKitty は表の上2行（金額計算そのもの）だけを担い、それより上の
-> 「予算・Organization」という集計・管理レイヤーは丸ごと未着手です。
+請求アカウント（予算上限・Credit 残高・複数コスト源の合算）を担うのは
+**billing-api** です。設計は `14-middleware-architecture.md` にあります。
 
-`catalog/billing-accounts/` のファイルはデフォルトから変更が必要な場合のみ作成します。
-すでに LC-Cloud 上にプロジェクトが存在するため、`data` ソースで参照します。
+CloudKitty が担うのは「使用量 × 単価 = 金額」の計算までで、OpenStack 用と
+Kubernetes 用の 2 インスタンスがそれぞれ独立に計算します。請求アカウント単位で
+両者を合算し、予算の 80% / 100% を判定するのは billing-api の役目です。
+Terraform から操作するのは CloudKitty の Hashmap レーティングルール
+（`platform/openstack/cloudkitty/`・`modules/cloudkitty-service/`）と
+クォータ（`modules/lc-cloud-quota`）です。
+
+`catalog/billing-accounts/` はクォータを既定から変えたい場合にだけ作ります。
+project の実体は個人なら `platform/members/`、チームなら `catalog/teams/<name>/`
+が既に作っているので、ここでは `data` で参照します。
 
 ### 個人アカウントのカスタマイズ
 
 ```hcl
-# terraform/catalog/billing-accounts/personal/alice/main.tf
-# デフォルト（lc-micro・予算上限なし）から変更する場合のみ作成
+# terraform/catalog/billing-accounts/personal/lcn_9a2bb6e30171/main.tf
 
-data "lc_cloud_personal_organization" "this" {
-  username = var.username
+# name だけで引くと同名の project が別 domain にあった場合にそちらを
+# 引き当ててしまうため、domain_id を必ず指定する
+data "openstack_identity_project_v3" "this" {
+  name      = "user-${replace(var.lcn_id, "_", "-")}"
+  domain_id = "default"
 }
 
 module "quota" {
   source     = "../../../../modules/lc-cloud-quota"
-  project_id = data.lc_cloud_personal_organization.this.openstack_project_id
+  project_id = data.openstack_identity_project_v3.this.id
   tier       = var.quota_tier
 
   quota_override = var.quota_override
 }
-
-resource "lc_cloud_budget" "this" {
-  count           = var.budget_limit != null ? 1 : 0
-  organization_id = data.lc_cloud_personal_organization.this.id
-  limit_credits   = var.budget_limit
-}
 ```
 
-```hcl
-# terraform/catalog/billing-accounts/personal/alice/variables.tf
-variable "username" {
-  type = string
-}
-
-variable "quota_tier" {
-  type    = string
-  default = "lc-micro"
-
-  validation {
-    condition = contains([
-      "lc-micro", "lc-small",
-      "lc-standard-8", "lc-standard-16", "lc-standard-32",
-      "lc-highmem-8", "lc-highcpu-16"
-    ], var.quota_tier)
-    error_message = "有効なティア名を指定してください（07-quota.md 参照）。"
-  }
-}
-
-variable "quota_override" {
-  description = "プリセットを上書きする個別値。省略したフィールドはプリセット値を使用します。"
-  type = object({
-    instances            = optional(number)
-    cores                = optional(number)
-    ram_gb               = optional(number)
-    volumes              = optional(number)
-    snapshots            = optional(number)
-    gigabytes            = optional(number)
-    per_volume_gigabytes = optional(number)
-    backups              = optional(number)
-    backup_gigabytes     = optional(number)
-    network              = optional(number)
-    subnet               = optional(number)
-    port                 = optional(number)
-    router               = optional(number)
-    floatingip           = optional(number)
-    security_group       = optional(number)
-    security_group_rule  = optional(number)
-  })
-  default = {}
-}
-
-variable "budget_limit" {
-  type        = number
-  default     = 5000   # Credits/月（個人デフォルト）
-}
-```
+`var.lcn_id` は台帳のキー（`lcn_9a2bb6e30171`）です。`quota_tier` の既定は
+`lc-micro`、`quota_override` でフィールド単位の上書きができます
+（`07-quota.md`）。
 
 ### チームアカウントのカスタマイズ
 
 ```hcl
 # terraform/catalog/billing-accounts/teams/infra/main.tf
-# デフォルト（lc-small・予算上限なし）から変更する場合のみ作成
 
-data "lc_cloud_organization" "this" {
-  name = var.team_name
+data "openstack_identity_project_v3" "this" {
+  name      = "team-${var.team_name}"
+  domain_id = "default"
 }
 
 module "quota" {
   source     = "../../../../modules/lc-cloud-quota"
-  project_id = data.lc_cloud_organization.this.openstack_project_id
+  project_id = data.openstack_identity_project_v3.this.id
   tier       = var.quota_tier
 
   quota_override = var.quota_override
 }
-
-resource "lc_cloud_budget" "this" {
-  count           = var.budget_limit != null ? 1 : 0
-  organization_id = data.lc_cloud_organization.this.id
-  limit_credits   = var.budget_limit
-}
-
-output "organization_id" {
-  value = data.lc_cloud_organization.this.id
-}
 ```
 
-```hcl
-# terraform/catalog/billing-accounts/teams/infra/variables.tf
-variable "team_name" {
-  type = string
-}
-
-variable "quota_tier" {
-  type    = string
-  default = "lc-small"
-
-  validation {
-    condition = contains([
-      "lc-small",
-      "lc-standard-8", "lc-standard-16", "lc-standard-32",
-      "lc-highmem-8", "lc-highcpu-16"
-    ], var.quota_tier)
-    error_message = "チーム請求アカウントは lc-small 以上を指定してください（07-quota.md 参照）。"
-  }
-}
-
-variable "quota_override" {
-  description = "プリセットを上書きする個別値。省略したフィールドはプリセット値を使用します。"
-  type = object({
-    instances            = optional(number)
-    cores                = optional(number)
-    ram_gb               = optional(number)
-    volumes              = optional(number)
-    snapshots            = optional(number)
-    gigabytes            = optional(number)
-    per_volume_gigabytes = optional(number)
-    backups              = optional(number)
-    backup_gigabytes     = optional(number)
-    network              = optional(number)
-    subnet               = optional(number)
-    port                 = optional(number)
-    router               = optional(number)
-    floatingip           = optional(number)
-    security_group       = optional(number)
-    security_group_rule  = optional(number)
-  })
-  default = {}
-}
-
-variable "budget_limit" {
-  type    = number
-  default = 15000   # Credits/月（チームデフォルト）
-}
-```
+既定は `lc-small` で、validation により `lc-micro` は選べません。
 
 ---
 
@@ -275,7 +156,7 @@ terraform/catalog/billing-accounts/
 │   ├── _template/
 │   │   ├── main.tf
 │   │   └── variables.tf
-│   └── alice/                  # デフォルトから変更が必要なメンバーのみ
+│   └── lcn_9a2bb6e30171/       # デフォルトから変更が必要なメンバーのみ
 │       ├── main.tf
 │       └── variables.tf
 └── teams/                      # チームクォータのカスタマイズ（必要な場合のみ）

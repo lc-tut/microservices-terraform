@@ -4,7 +4,17 @@
 # このモジュールに output を足して参照すること。
 
 locals {
-  prefix = var.scope_type == "team" ? "team" : "proj"
+  # スコープ種別 → グループ名の接頭辞。
+  # 三項演算子で "team 以外は proj" と書くと、スコープ種別が増えたときに
+  # 新しい種別が黙って proj- に落ちる。グループ名は lcn-infra-api が
+  # 解析する契約なので、そうなると誰も気づかないまま別スコープの権限を
+  # 指す名前が生成される。必ず map で明示的に対応させること。
+  prefixes = {
+    team    = "team"
+    project = "proj"
+    user    = "user"
+  }
+  prefix = local.prefixes[var.scope_type]
 
   # Keystone の既定ロールは admin / member / reader の 3 つしかないため、
   # owner と member は OpenStack API 上まったく同じ権限になる。

@@ -1,6 +1,15 @@
 output "roles" {
   value       = ["owner", "member", "viewer"]
-  description = "全スコープ共通のロール語彙。for_each のキーとして使う"
+  description = "全スコープ共通のロール語彙。写像表（keystone_role 等）のキー"
+}
+
+output "scope_roles" {
+  value       = var.scope_type == "user" ? ["owner"] : ["owner", "member", "viewer"]
+  description = <<-EOT
+    そのスコープで実際に作るロール。グループを for_each で作るときはこちらを使う。
+    個人 project は本人だけが入るため owner のみで、roles をそのまま回すと
+    永久に空の user-<id>-member / user-<id>-viewer が残る。
+  EOT
 }
 
 output "grants" {

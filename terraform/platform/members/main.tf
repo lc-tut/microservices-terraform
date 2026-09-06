@@ -10,6 +10,11 @@ terraform {
       source  = "goauthentik/authentik"
       version = "~> 2026.5"
     }
+    # 個人 OpenStack project の作成に使う（personal_projects.tf）
+    openstack = {
+      source  = "terraform-provider-openstack/openstack"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -21,6 +26,12 @@ provider "github" {
 provider "authentik" {
   url   = var.authentik_url
   token = var.authentik_token
+}
+
+# 個人 project の作成には admin 権限が要る。CI では Phase 1 に渡している
+# OS_APPLICATION_CREDENTIAL_ID / _SECRET を使う（catalog/teams/ と同じ資格情報）。
+provider "openstack" {
+  cloud = var.os_cloud
 }
 
 locals {
