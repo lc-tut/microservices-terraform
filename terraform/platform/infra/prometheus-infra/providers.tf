@@ -1,3 +1,3 @@
 provider "openstack" {
-  cloud = var.os_cloud
+  auth_url = var.os_auth_url
 }

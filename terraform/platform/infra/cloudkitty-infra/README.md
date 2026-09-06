@@ -63,9 +63,9 @@ recording rule の定義は `infra/prometheus-infra/templates/cloud-init.yaml.tf
 
 ## 前提
 
-- `local/clouds.yaml` に対象プロジェクトへスコープされた cloud エントリ
-  （既定 `polaris-admin`）。App credential は project 越境不可のため
-  admin パスワード認証を使う想定（`idp-infra` と同じ理由）。
+- `var.os_auth_url` と、対象プロジェクトへスコープされた OpenStack 認証情報
+  （`OS_*` 環境変数）。この root は project を越境しないので application
+  credential で足りる。ローカルは `OS_CLOUD` + `local/clouds.yaml` でも可。
 - `var.keystone_auth_url` / `var.os_admin_username` / `var.os_admin_password` は
   デフォルト値を置いていない（環境ごとに異なるため）。apply 時に明示的に渡す。
 - `var.prometheus_url` は `infra/prometheus-infra/` を先に apply し、その

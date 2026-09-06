@@ -48,9 +48,10 @@ cloud-init が Docker をインストールし、`local/authentik/docker-compose
 
 ## 前提
 
-- `local/clouds.yaml` に lc-dev スコープの cloud エントリ（既定 `polaris-admin`）。
-  App credential は project 越境不可のため admin パスワード認証を使う。
-  出所は `local/polaris-access.md`。
+- `var.os_auth_url` と、IdP を建てるプロジェクトへスコープされた OpenStack
+  認証情報（`OS_*` 環境変数）。この root は project を越境しないので
+  application credential で足りる。ローカルは `OS_CLOUD` +
+  `local/clouds.yaml` でも可。
 - 本番 state バックエンドは Ceph RGW（S3 互換）。認証情報は GitHub Secrets
   （`CEPH_RGW_ENDPOINT`/`CEPH_ACCESS_KEY_ID`/`CEPH_SECRET_ACCESS_KEY`）のみが
   持っており、ローカル開発機には無い想定。ローカルで動作確認・apply したい

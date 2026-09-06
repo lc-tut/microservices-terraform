@@ -8,10 +8,10 @@ variable "team_project_id" {
   description = "所属チームの OpenStack project ID。catalog/teams/<team-name>/ の terraform output -raw openstack_project_id を渡す"
 }
 
-variable "os_cloud" {
+variable "os_auth_url" {
   type        = string
-  description = "local/clouds.yaml の cloud 名（admin 権限。network/subnet/router_interface の作成に使う）"
-  default     = "polaris-admin"
+  description = "Keystone の認証エンドポイント（admin 権限。network/subnet/router_interface の作成に使う）。null なら OS_AUTH_URL 環境変数から解決する（ローカルは OS_CLOUD + clouds.yaml も可）"
+  default     = null
 }
 
 variable "subnetpool_id" {
