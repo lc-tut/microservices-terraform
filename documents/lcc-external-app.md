@@ -424,10 +424,10 @@ ADR-0007 は、要件定義書 p.20 の「年次付与・繰越なし・枯渇�
 | サービス分割 | `14-middleware-architecture.md`: infra-api / billing-api / k8s-api の 3 サービス | 同一 codebase・単一バイナリを `api` / `worker` / `reconciler` の 3 process mode で起動。将来分割しても公開 path は変えない |
 | 認証 | `14`: Authentik Outpost の forward-auth に委譲し `X-authentik-*` ヘッダーを信頼 | API 自身が access token の署名・claim を検証し、権限は control-plane DB の Membership から取る |
 | テナント | 構成仕様書 用語定義(6): 組織 = OpenStack Project / Namespace / Authentik Group に 1:1 | Team（認可境界）1:N Project（リソース境界）。ADR-0004 |
-| 認可判定 | `14`: Vault の `kv/app-creds/{project}.team_name` を読んで判定 | DB の Membership と Team/Project 所有関係だけで判定 |
+| 認可判定 | ~~`14`: Vault の `kv/app-creds/{project}.team_name` を読んで判定~~ → **2026-09-06 に `14` が修正され、`X-authentik-groups` のグループ名を解析する方式になった** | DB の Membership と Team/Project 所有関係だけで判定 |
 | 請求アカウント | `14`: billing-api が独自 DB を持ち、`restapi` プロバイダー経由で Terraform が叩く | 方向は同じ。ただし単一 API に統合し、`billing_admin` ロールと `X-LCC-Admin-Reason` は廃止 |
 | Kubernetes | `14`: k8s-api として同居 | v0.3.0 の対象外。別 API として後日定義 |
-| Credential 保管 | `14`: Vault ／ `16-implementation-phases.md` [P1]: Vault 非導入・GitHub Secrets | CI/CD 用 = GitHub Actions Secret、Middleware runtime / observer 用 = Vault、に分離 |
+| Credential 保管 | ~~`14`: Vault ／ `16` [P1]: Vault 非導入~~ → **2026-09-06 に [P1] が「CI/CD が使う認証情報」に限定して書き直され、矛盾は解消**（実行時は Vault） | CI/CD 用 = GitHub Actions Secret、Middleware runtime / observer 用 = Vault、に分離 |
 
 ### 12.2 この repo の文書に求められている更新
 
@@ -445,13 +445,15 @@ ADR-0004 と `api-vnext.md` の承認条件・ゲートに明記されている�
    Floating IP（レイヤー表は Terraform ✅／endpoint 設計概要には `POST /floatingips/{id}/associate` がある）と
    DNS レコード（同様）が食い違っています。`lcc-external-app` はレイヤー表を正とし、
    Middleware API には置かない（参照のみ）と決めています。
-5. **Credential 保管先の記述を統一する。** `14` の Vault と `16` [P1] の「Vault 非導入」が矛盾。
-   CI 用 GitHub Actions Secret は要件定義書 4.6 / 5.4 の [Must] に対する部分例外として承認が要る。
+5. ~~**Credential 保管先の記述を統一する。**~~ ✅ **解決済み（2026-09-06）**。`16` [P1] が
+   「CI/CD（GitHub Actions）が使う認証情報」に限定して書き直され、Middleware API が
+   実行時に使う経路は Vault であることが Phase 6 の前提として明記された。
 6. **外部公開範囲。** 構成仕様書 p.62 は社内 DNS のみ・外部非公開、`14` は Internet → External LB の図。
    `lcc-external-app` は承認が無い限り構成仕様書の社内限定を上位制約として扱っています。
-7. **`catalog/projects/_template` への追加。** `14` の記述と同じく、`team_name` を
-   `team_project_id` とは別の入力変数として追加し、apply 時に Vault へ
-   `app_cred_id` / `app_cred_secret` / `team_name` を書く処理が要ります。
+7. ~~**`catalog/projects/_template` への `team_name` 追加。**~~ ✅ **不要になりました（2026-09-06）**。
+   `14` の認可がグループ名の解析に一本化され、Vault に `team_name` を持たせる必要が
+   なくなったため、Phase 6 の前提条件からも外されました。
+   Vault へ書くのは `app_cred_id` / `app_cred_secret` の 2 つです。
 8. **LCC Terraform Provider の実装。** `lccloud_billing_account` /
    `lccloud_project_billing_account` が無いと請求アカウントを作れません。
 9. **二段階 archive handshake**（prepare → destroy → finalize の server-side verifier）を
