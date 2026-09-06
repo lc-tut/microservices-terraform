@@ -127,8 +127,11 @@ jobs:
           TF_VAR_smtp_use_tls: ${{ secrets.SMTP_USE_TLS }}
           TF_VAR_smtp_use_ssl: ${{ secrets.SMTP_USE_SSL }}
           TF_VAR_smtp_from_address: ${{ secrets.SMTP_FROM_ADDRESS }}
-          TF_VAR_github_oauth_client_id: ${{ secrets.GITHUB_OAUTH_CLIENT_ID }}
-          TF_VAR_github_oauth_client_secret: ${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}
+          # GitHub は GITHUB_ で始まるシークレット名を予約していて登録できない
+          # （HTTP 422: Secret names must not start with GITHUB_）。
+          # GITHUB_OAUTH_CLIENT_ID という名前では永久に空が渡るため GH_ 始まりにしている。
+          TF_VAR_github_oauth_client_id: ${{ secrets.GH_OAUTH_CLIENT_ID }}
+          TF_VAR_github_oauth_client_secret: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
           TF_VAR_discord_oauth_client_id: ${{ secrets.DISCORD_OAUTH_CLIENT_ID }}
           TF_VAR_discord_oauth_client_secret: ${{ secrets.DISCORD_OAUTH_CLIENT_SECRET }}
           TF_VAR_webhook_secret: ${{ secrets.AUTHENTIK_WEBHOOK_SECRET }}
