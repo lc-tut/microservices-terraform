@@ -72,6 +72,13 @@ jobs:
           workload_identity_provider: projects/897661050223/locations/global/workloadIdentityPools/github-actions/providers/github
           service_account: github-actions-tfstate@main-vcompute.iam.gserviceaccount.com
 
+      # scripts/decrypt-members.sh が使う。ubuntu-latest には同梱されていない
+      - name: sops インストール
+        run: |
+          curl -fsSL -o /tmp/sops \
+            https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
+
       - name: SOPS 復号キー設定
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
