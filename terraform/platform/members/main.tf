@@ -28,10 +28,13 @@ provider "authentik" {
   token = var.authentik_token
 }
 
-# 個人 project の作成には admin 権限が要る。CI では Phase 1 に渡している
-# OS_APPLICATION_CREDENTIAL_ID / _SECRET を使う（catalog/teams/ と同じ資格情報）。
+# 個人 project の作成には admin 権限が要る。認証情報は OS_* 環境変数で渡す。
+# application credential は作成時のプロジェクトに固定され system スコープの
+# トークンを取れないため、Keystone が enforce_scope で動いている環境では
+# project 作成に使えない。その場合は system スコープの認証情報を渡すこと
+# （catalog/teams/ と同じ制約）。
 provider "openstack" {
-  cloud = var.os_cloud
+  auth_url = var.os_auth_url
 }
 
 locals {

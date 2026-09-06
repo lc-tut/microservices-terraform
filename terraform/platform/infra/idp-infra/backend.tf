@@ -1,21 +1,13 @@
+# state は GCS バケット linuxclub-network-cloud-terraform-state（GCP プロジェクト
+# main-vcompute）に置く。state のロックは GCS backend が .tflock オブジェクトの
+# 排他作成で行うため、S3 backend の use_lockfile に相当する設定は要らない。
 terraform {
-  # terraform/platform/idp/ と同じ MinIO(ローカル) / Ceph RGW(本番 CI) の
-  # S3 互換バックエンドを共有する。key だけ分ける。
-  #
-  # key は terraform/platform/idp-infra/（ディレクトリ再編前の旧パス）のまま
-  # 意図的に変更していない。Polaris に実際に apply 済みの本番 state を
-  # 参照しているため、ディレクトリ移動に合わせて key も変えると
-  # state マイグレーションが必要になる（このリポジトリからは実施できない）。
-  backend "s3" {
-    bucket = "linuxclub-tfstate"
-    key    = "tfstate/terraform/platform/idp-infra/terraform.tfstate"
-    region = "us-east-1"
-
-    use_lockfile                = true
-    use_path_style              = true
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
+  # prefix はディレクトリ構成に合わせている。S3 backend 時代は
+  # tfstate/terraform/platform/idp-infra/（ディレクトリ再編前の旧パス）を使って
+  # いたが、あれは Polaris に apply 済みの state を参照し続けるための措置だった。
+  # バックエンドごと別環境へ移したので、その制約はもう無い。
+  backend "gcs" {
+    bucket = "linuxclub-network-cloud-terraform-state"
+    prefix = "tfstate/terraform/platform/infra/idp-infra"
   }
 }

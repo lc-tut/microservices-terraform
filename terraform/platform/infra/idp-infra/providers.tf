@@ -1,8 +1,7 @@
-# OpenStack 認証は local/clouds.yaml（OS_CLIENT_CONFIG_FILE）の cloud 名で行う。
-# 既定の "polaris-admin" は Kolla-Ansible の admin をパスワード認証で lc-dev
-# プロジェクトにスコープしたエントリ（application credential は他プロジェクトへ
-# 越境できないため）。認証情報の出所・失効管理は
-# local/AUTHENTIK-IDP-CREDENTIALS.md を参照。
+# OpenStack 認証は auth_url + OS_* 環境変数で行う。IdP を建てるプロジェクトに
+# スコープされた認証情報を渡すこと。この root はプロジェクトを越境しないので
+# application credential で足りる。
+# 認証情報の出所・失効管理は local/AUTHENTIK-IDP-CREDENTIALS.md を参照。
 provider "openstack" {
-  cloud = var.os_cloud
+  auth_url = var.os_auth_url
 }

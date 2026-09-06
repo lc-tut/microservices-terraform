@@ -1,7 +1,7 @@
-variable "os_cloud" {
+variable "os_auth_url" {
   type        = string
-  description = "local/clouds.yaml の cloud 名（lc-dev プロジェクトにスコープされていること）"
-  default     = "polaris-admin"
+  description = "Keystone の認証エンドポイント（IdP を建てるプロジェクトにスコープされた認証情報を使うこと）。null なら OS_AUTH_URL 環境変数から解決する（ローカルは OS_CLOUD + clouds.yaml も可）"
+  default     = null
 }
 
 variable "instance_name" {

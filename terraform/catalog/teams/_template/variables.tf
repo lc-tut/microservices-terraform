@@ -3,10 +3,10 @@ variable "team_name" {
   description = "チーム名。Authentik Group 名・OpenStack project 名の両方に使う"
 }
 
-variable "os_cloud" {
+variable "os_auth_url" {
   type        = string
-  description = "local/clouds.yaml の cloud 名（admin 権限が必要）"
-  default     = "polaris-admin"
+  description = "Keystone の認証エンドポイント（project 作成のため admin 権限が必要）。null なら OS_AUTH_URL 環境変数から解決する（ローカルは OS_CLOUD + clouds.yaml も可）"
+  default     = null
 }
 
 variable "authentik_url" {
