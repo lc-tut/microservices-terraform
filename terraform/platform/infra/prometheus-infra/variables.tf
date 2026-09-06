@@ -27,8 +27,9 @@ variable "root_volume_size" {
 }
 
 variable "private_network_name" {
-  type    = string
-  default = "lc-dev-net"
+  type        = string
+  description = "VM を載せる内部ネットワーク。platform/openstack/network/ が作る全プロジェクト共通の internal-net を使う"
+  default     = "internal-net"
 }
 
 variable "external_network_name" {

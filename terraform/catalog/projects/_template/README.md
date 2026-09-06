@@ -17,8 +17,7 @@ cd terraform/catalog/projects/<project-name>
 ```hcl
 project_name    = "<project-name>"
 team_project_id = "<catalog/teams/<team-name>/ の terraform output -raw openstack_project_id>"
-subnetpool_id          = "<platform/openstack/network/ の terraform output -raw subnetpool_id>"
-vpc_gateway_router_id  = "<platform/openstack/network/ の terraform output -raw vpc_gateway_router_id>"
+team_network_name = "<catalog/teams/<team-name>/ の terraform output -raw network_name>"
 ```
 
 `terraform_remote_state` は使わない。本番 backend が確定するまでの間、
@@ -30,10 +29,24 @@ vpc_gateway_router_id  = "<platform/openstack/network/ の terraform output -raw
 
 | リソース | 内容 |
 | --- | --- |
-| `openstack_networking_network_v2.project` | プロジェクト専用 private network |
-| `openstack_networking_subnet_v2.project` | subnetpool から /24 を払い出し |
-| `openstack_networking_router_interface_v2.project` | VPC Gateway への接続 |
+| `openstack_networking_secgroup_v2.baseline` | プロジェクト分離用のベースライン SG（同一プロジェクト内のみ疎通） |
 | `openstack_identity_application_credential_v3.workspace_ci` | Access Rules 付き。Workspace CI/CD 用 |
+
+ネットワークはこの root では作らない。所属チームの `catalog/teams/<team-name>/` が
+`/26` を払い出したチーム専用ネットワーク `team-<team-name>` を、そのチームの
+全プロジェクトで共有する。この root は受け取った名前を `network_name` として
+output し直すだけで、`workspaces/` 側の `modules/lc-vm`・`modules/lc-db` に
+`terraform output -raw network_name` を渡す（subnet は指定しない）。
+
+チームのネットワークが埋まったら、チーム側の `subnet_block_count` を増やす
+（`catalog/teams/_template/README.md` 参照）。
+
+同じチームのプロジェクト同士は Keystone project もネットワークも共有するため、
+**ネットワーク上の境界がありません**。境界はベースライン SG
+（`<project>-baseline`、同一 SG メンバーからの ingress のみ許可 + egress 全開放）
+で作るので、**このプロジェクトの VM は必ず
+`terraform output -raw security_group_id` の SG を付けて起動すること**。
+公開したいポートは各プロジェクトが自分で SG ルールを足して開ける。
 
 DNS Zone・LB Pool はこの Phase では作らない（`16-implementation-phases.md` の
 `[P10]`、Phase 8・Phase 9 で扱う）。Harbor Project 連携も未実装

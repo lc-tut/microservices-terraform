@@ -221,13 +221,15 @@ curl -H "Authorization: Bearer <AUTHENTIK_TOKEN>" \
 
 ### 3-1. `terraform/platform/openstack/network/` の apply
 
-VPC Gateway・subnetpool・外部ネットワークを作成します。
+出口ルーター（`int-router`）・共有内部ネットワーク（`internal-net` /
+`int-subnet`）・外部サブネット（`ext-subnet`）・プロジェクト subnet 払い出し用の
+`subnetpool` を作成します。
 
 ```bash
 git checkout -b feat/platform-network
 # terraform/platform/openstack/network/ を実装
 git add terraform/platform/openstack/network/
-git commit -m "feat(network): VPC gateway and subnetpool"
+git commit -m "feat(network): egress router, shared network and subnetpool"
 git push && gh pr create ...
 # 承認 → merge → apply
 ```
@@ -257,11 +259,19 @@ git push && gh pr create ...
 **検証:**
 
 ```bash
+# 共有内部ネットワークとサブネットが存在すること
+openstack network show internal-net
+openstack subnet show int-subnet
+
 # subnetpool が存在すること
 openstack subnet pool list
 
-# 外部ネットワークが存在すること
+# 出口ルーターが ext-net をゲートウェイにしていること
+openstack router show int-router -c external_gateway_info
+
+# 外部ネットワークとそのサブネットが存在すること
 openstack network list --external
+openstack subnet show ext-subnet
 ```
 
 ---
@@ -305,7 +315,7 @@ git push && gh pr create ...
 
 apply が完了すると以下が自動作成されます:
 
-- OpenStack Project・Network・Subnet・Router Interface・DNS Zone
+- ベースライン Security Group・DNS Zone（ネットワークはチーム側で払い出し済み）
 - GitHub Secret `LC_CLOUD_APP_CRED_ID_MY_PRODUCT` / `LC_CLOUD_APP_CRED_SECRET_MY_PRODUCT`
 
 **検証:**
@@ -402,10 +412,10 @@ kolla-ansible -i <inventory> reconfigure --tags horizon
 
 - **multi-tenant モード**（`enable_trove_singletenant: false`。デフォルト）:
   ゲスト VM は呼び出したプロジェクト自身のネットワークに直接接続される。
-  つまり **各プロジェクトのネットワークから control plane の内部 API 網へ
+  つまり **ゲストが乗るネットワークから control plane の内部 API 網へ
   経路が無いと動かない**。本リポジトリの
-  `12-openstack-resources.md`「VPC Gateway 強制・独自 LB 作成禁止」方針では、
-  プロジェクトネットワークは共有外部網経由のみに限定する設計のため、
+  `12-openstack-resources.md`「出口ルーター強制・独自 LB 作成禁止」方針では、
+  `internal-net` の外向き通信は `int-router` 経由に限定する設計のため、
   そのままでは満たせない可能性が高い。
 - **singletenant モード**（`enable_trove_singletenant: true`）:
   ゲスト VM は呼び出し元プロジェクトではなく **Trove 自身の service

@@ -3,6 +3,25 @@ output "openstack_project_id" {
   value       = openstack_identity_project_v3.this.id
 }
 
+output "network_name" {
+  description = "チーム専用ネットワーク名。workspaces/ の modules/lc-vm・lc-db に var.network_name として渡す"
+  value       = openstack_networking_network_v2.team.name
+}
+
+output "network_id" {
+  value = openstack_networking_network_v2.team.id
+}
+
+output "subnet_ids" {
+  description = "チームネットワークにぶら下がる /26 の ID 一覧（subnet_block_count 本）"
+  value       = openstack_networking_subnet_v2.team[*].id
+}
+
+output "subnet_cidrs" {
+  description = "subnetpool から実際に払い出された /26 の一覧"
+  value       = openstack_networking_subnet_v2.team[*].cidr
+}
+
 output "authentik_group_id" {
   description = "チーム包括グループ（権限は持たない。access.tf のロール別グループを参照）"
   value       = authentik_group.this.id

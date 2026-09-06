@@ -3,9 +3,10 @@ variable "name" {
   description = "DBインスタンス名。同一プロジェクト内で一意にすること"
 }
 
-variable "project_name" {
+variable "network_name" {
   type        = string
-  description = "所属する catalog/projects の名前。同名の network を data source で自動解決する"
+  default     = "internal-net"
+  description = "DB インスタンスを載せる共有内部ネットワーク（platform/openstack/network/）"
 }
 
 variable "flavor" {

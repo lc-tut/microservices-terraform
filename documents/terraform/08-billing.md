@@ -45,10 +45,11 @@ username は本人が enrollment 後に変更できるためです。username �
 改名した時点で project 名と実体がずれます。
 
 既定では **Keystone project とクォータ、グループとロール付与だけ**を作ります。
-ネットワークと Application Credential は作りません。外向き通信は単一の
-VPC Gateway router に集約する設計のため人数分の router interface を張ると
-そこが詰まること、Application Credential は 1 つあたり約 40 本の access rule を
-持つことが理由です。個人でネットワークが必要になったら、そのとき申請して足します。
+ネットワークと Application Credential は作りません。人数分の router interface を
+`int-router` に張るとそこが詰まること、Application Credential は 1 つあたり
+約 40 本の access rule を持つことが理由です。個人 project の VM は共有
+`internal-net` に乗り、Neutron の default SG が境界になります。専用ネットワークが
+必要になったら、そのとき申請して足します。
 
 ### チーム請求アカウント
 

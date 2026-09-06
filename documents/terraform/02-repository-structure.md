@@ -39,10 +39,10 @@ microservices-terraform/
 │   │   │   └── auto-gen-github-usernames.yaml  # Bot: GitHub username マップ（OAuth連携時、平文・全体共通）
 │   │   ├── openstack/                 # OpenStack API を直接操作する platform 層リソース
 │   │   │   │                          #   （各サブディレクトリが独立した Terraform root）
-│   │   │   ├── network/                 # VPC Gateway・外部ネットワーク・subnetpool
-│   │   │   │   ├── gateway.tf           # VPC Gateway ルーター
-│   │   │   │   ├── subnetpool.tf        # IP 帯域マスタープール
-│   │   │   │   └── external_network.tf  # 外部ネットワーク（data 参照のみ）
+│   │   │   ├── network/                 # 出口ルーター・共有内部ネットワーク・subnetpool
+│   │   │   │   ├── internal_network.tf  # internal-net / int-subnet / int-router
+│   │   │   │   ├── subnetpool.tf        # チーム subnet 払い出しプール
+│   │   │   │   └── external_network.tf  # ext-net（data 参照）・ext-subnet・RBAC ポリシー
 │   │   │   ├── quotas/                  # グローバルデフォルトクォータ（quota-class-set）
 │   │   │   │   └── main.tf
 │   │   │   ├── cloudkitty/              # CloudKitty Hashmap 課金ルール（Credit 単価）
@@ -75,6 +75,7 @@ microservices-terraform/
 │   │   ├── teams/                     # チームの登録・定義（Authentik グループ）
 │   │   │   ├── _template/             # 新チーム作成テンプレート（コピーして使う）
 │   │   │   │   ├── authentik.tf
+│   │   │   │   ├── lc_cloud.tf        # Keystone project・クォータ・チームネットワーク(/26)
 │   │   │   │   ├── members.yaml       # チームメンバーの username リスト
 │   │   │   │   ├── variables.tf       # billing_account_id（省略可）
 │   │   │   │   └── outputs.tf
@@ -92,12 +93,12 @@ microservices-terraform/
 │   │   └── projects/                  # プロジェクトの登録・定義
 │   │       ├── _template/             # 新プロジェクト作成テンプレート（コピーして使う）
 │   │       │   ├── harbor.tf
-│   │       │   ├── lc_cloud.tf        # OpenStack network・subnet・Application Credential・DNS zone
+│   │       │   ├── lc_cloud.tf        # ベースライン SG・Application Credential・DNS zone
 │   │       │   ├── variables.tf
 │   │       │   └── outputs.tf
 │   │       └── my-product/
 │   │           ├── harbor.tf          # Harbor registry
-│   │           ├── lc_cloud.tf        # OpenStack network・subnet・Application Credential・DNS zone
+│   │           ├── lc_cloud.tf        # ベースライン SG・Application Credential・DNS zone
 │   │           ├── variables.tf
 │   │           └── outputs.tf
 │   │

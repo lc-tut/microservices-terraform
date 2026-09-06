@@ -7,11 +7,24 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 
 ## 設計原則
 
-- **VPC Gateway 強制**: 外向き通信はすべてプラットフォーム管理の VPC Gateway を経由させる。
+- **出口ルーター強制**: 外向き通信はすべてプラットフォーム管理の `int-router` を経由させる。
   独自 NAT・独自 LB は禁止。Floating IP はデフォルトクォータ 0 のため禁止と同等だが、
   billing-accounts で申請・承認後にオプトインで利用可能（課金あり）。
-- **IP 払い出し管理**: Platform が `openstack_networking_subnetpool_v2` で IP 帯域を管理し、
-  `catalog/projects/` がプロジェクトごとに /24 を割り当てる。ユーザーは `data` 参照のみ。
+- **IP 払い出し管理**: Platform が `openstack_networking_subnetpool_v2`
+  （`lc-cloud-pool`、`172.16.224.0/19`）で IP 帯域を管理し、`catalog/teams/` が
+  チームごとに /26 を払い出す。CIDR は人間が選ばず Neutron に自動採番させる。
+  ネットワークの単位はチームで、そのチームの全プロジェクトが共有する。
+  ユーザーは `data` 参照のみ。
+- **共有内部ネットワーク**: platform 自身の VM と個人プロジェクトの VM は
+  `internal-net` / `int-subnet`（`172.16.192.0/19`）に乗る。部員数ぶんの
+  router interface を `int-router` に張るのを避けるため、個人プロジェクトには
+  専用ネットワークを作らない。
+- **アドレスはクラスタ内部用 `172.16.192.0/18` の中で完結させる**: ラボ側が
+  確保したこのレンジを半分に割って使い、外のレンジは取りに行かない。
+- **分離は Security Group で行う**: 同じチームのプロジェクトはネットワークを共有し、
+  別チームとも全 subnet が同じ `int-router` にぶら下がるためルーター経由で到達できる。
+  `catalog/projects/` がベースライン SG（同一 SG メンバーからの ingress のみ許可）を
+  発行し、VM は必ずこれを付けて起動する。
 - **SSH 鍵の非 Terraform 管理**: `openstack_compute_keypair_v2` は
   CLI ツール（Authentik SSO + 証明書発行）で代替する。Terraform には記述しない。
 - **Application Credential + Access Rules**: `catalog/projects/` が
@@ -45,7 +58,7 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 | `openstack_compute_keypair_v2` | 🛠 CLI | — | CLI が SSH 証明書で代替。Terraform 記述不可 |
 | `openstack_compute_servergroup_v2` | 🟢 Tier 3 | `workspaces/` | anti-affinity / affinity |
 | `openstack_compute_volume_attach_v2` | 🟢 Tier 3 | `workspaces/` | instance + volume を同一スタック推奨 |
-| `openstack_compute_interface_attach_v2` | ⛔ BLOCKED | — | VPC Gateway 強制のため禁止 |
+| `openstack_compute_interface_attach_v2` | ⛔ BLOCKED | — | 出口ルーター強制のため禁止 |
 | `openstack_compute_flavor_v2` | 🔴 Tier 1 | `platform/` | lc-micro / lc-small 等を platform が定義 |
 | `openstack_compute_aggregate_v2` | 🔴 Tier 1 | `platform/` | ホストアグリゲート |
 | `openstack_compute_quotaset_v2` | 🔴 Tier 1 | `platform/openstack/quotas/` | プロジェクトごとのクォータ |
@@ -68,18 +81,18 @@ LC-Cloud (OpenStack) が提供するすべての Terraform リソースを、
 
 | リソース | 分類 | 管理フォルダ | 備考 |
 | --- | --- | --- | --- |
-| `openstack_networking_network_v2` (共有・外部) | 🔴 Tier 1 | `platform/openstack/network/` | platform backbone |
-| `openstack_networking_network_v2` (プロジェクト専用) | 🟡 Tier 2 | `catalog/projects/` | private network |
-| `openstack_networking_subnet_v2` | 🟡 Tier 2 | `catalog/projects/` | subnetpool から /24 を払い出し |
-| `openstack_networking_subnetpool_v2` | 🔴 Tier 1 | `platform/openstack/network/` | IP 帯域のマスタープール |
-| `openstack_networking_router_v2` | 🔴 Tier 1 | `platform/openstack/network/` | VPC Gateway ルーター |
-| `openstack_networking_router_interface_v2` | 🟡 Tier 2 | `catalog/projects/` | VPC Gateway へ project subnet を接続 |
+| `openstack_networking_network_v2` (共有・外部) | 🔴 Tier 1 | `platform/openstack/network/` | `internal-net`。platform VM と個人 project が乗る |
+| `openstack_networking_network_v2` (チーム専用) | 🟡 Tier 2 | `catalog/teams/` | チームの private network |
+| `openstack_networking_subnet_v2` | 🔴 Tier 1 / 🟡 Tier 2 | `platform/openstack/network/` / `catalog/teams/` | `int-subnet`・`ext-subnet` は platform、チーム /26 は catalog |
+| `openstack_networking_subnetpool_v2` | 🔴 Tier 1 | `platform/openstack/network/` | IP 帯域のマスタープール（`172.16.224.0/19`、/26 払い出し） |
+| `openstack_networking_router_v2` | 🔴 Tier 1 | `platform/openstack/network/` | 出口ルーター `int-router` |
+| `openstack_networking_router_interface_v2` | 🔴 Tier 1 / 🟡 Tier 2 | `platform/openstack/network/` / `catalog/teams/` | `int-router` へ subnet を接続 |
 | `openstack_networking_router_route_v2` | 🔴 Tier 1 | `platform/openstack/network/` | 静的ルート管理 |
 | `openstack_networking_floatingip_v2` | 🟢 Tier 3 | `workspaces/` | デフォルトクォータ 0。billing-accounts 申請後に利用可能。課金あり |
 | `openstack_networking_floatingip_associate_v2` | 🟢 Tier 3 | `workspaces/` | 同上 |
 | `openstack_networking_port_v2` | ⛔ BLOCKED | — | 明示的なポート作成禁止。インスタンス生成時の暗黙ポートは Nova API 経由のため影響なし |
-| `openstack_networking_secgroup_v2` | 🟢 Tier 3 | `workspaces/` | プロジェクトスコープ内 |
-| `openstack_networking_secgroup_rule_v2` | 🟢 Tier 3 | `workspaces/` | |
+| `openstack_networking_secgroup_v2` | 🟡 Tier 2 / 🟢 Tier 3 | `catalog/projects/` / `workspaces/` | ベースライン SG（テナント分離）は catalog、追加 SG は workspaces |
+| `openstack_networking_secgroup_rule_v2` | 🟡 Tier 2 / 🟢 Tier 3 | `catalog/projects/` / `workspaces/` | 公開ポートは workspaces 側で開ける |
 | `openstack_networking_rbac_policy_v2` | 🔴 Tier 1 | `platform/openstack/network/` | ネットワーク共有ポリシー |
 | `openstack_networking_trunk_v2` | ⛔ BLOCKED | — | platform が管理 |
 | `openstack_networking_qos_policy_v2` | 🔴 Tier 1 | `platform/` | QoS ポリシー定義 |
@@ -353,10 +366,10 @@ Workspace 向けに提供する便利モジュール一覧。
 
 | フォルダ | 管理リソース |
 | --- | --- |
-| `platform/openstack/network/` | subnetpool・外部 network・VPC Gateway router・RBAC policy |
+| `platform/openstack/network/` | subnetpool・internal-net / int-subnet・int-router・ext-subnet・RBAC policy |
 | `platform/openstack/images/` | base image・image access |
 | `platform/openstack/quotas/` | compute / storage / network / LB quota |
 | `platform/idp/` | user・group・role・role assignment |
-| `catalog/teams/<name>/` | project（Keystone）・クォータ（`modules/lc-cloud-quota`） |
-| `catalog/projects/<name>/` | project network・subnet（/24）・router interface・application credential（Access Rules 付き） |
+| `catalog/teams/<name>/` | project（Keystone）・クォータ・チームネットワーク / subnet（/26）・router interface |
+| `catalog/projects/<name>/` | ベースライン SG・application credential（Access Rules 付き） |
 | `workspaces/<name>/` | インスタンス・ボリューム・SG・オブジェクトストレージ・DNS recordset・シークレット・DB・Kubernetes リソース |

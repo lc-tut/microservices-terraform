@@ -1,13 +1,20 @@
-output "network_id" {
-  value = openstack_networking_network_v2.project.id
-}
-
+# workspaces/ 側の modules/lc-vm・lc-db に var.network_name として渡す。
+# 実体は所属チームのネットワーク（この root では作らない）。
 output "network_name" {
-  value = openstack_networking_network_v2.project.name
+  value = data.openstack_networking_network_v2.team.name
 }
 
-output "subnet_id" {
-  value = openstack_networking_subnet_v2.project.id
+output "network_id" {
+  value = data.openstack_networking_network_v2.team.id
+}
+
+output "security_group_id" {
+  value       = openstack_networking_secgroup_v2.baseline.id
+  description = "ベースライン SG。同じチームネットワーク上の他プロジェクトと分離するため、このプロジェクトの VM は必ずこれを付けて起動する"
+}
+
+output "security_group_name" {
+  value = openstack_networking_secgroup_v2.baseline.name
 }
 
 output "app_cred_id" {

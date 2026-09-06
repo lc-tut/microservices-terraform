@@ -19,6 +19,27 @@ variable "authentik_token" {
   sensitive = true
 }
 
+variable "subnetpool_id" {
+  type        = string
+  description = "terraform/platform/openstack/network/ の terraform output -raw subnetpool_id。ここから /26 を払い出す"
+}
+
+variable "router_id" {
+  type        = string
+  description = "terraform/platform/openstack/network/ の terraform output -raw internal_router_id（int-router）"
+}
+
+variable "subnet_block_count" {
+  type        = number
+  description = "チームネットワークに張る /26 の本数。61 台を超えたら増やす（既存 VM は無停止）"
+  default     = 1
+
+  validation {
+    condition     = var.subnet_block_count >= 1
+    error_message = "1 以上を指定してください。"
+  }
+}
+
 variable "automation_username" {
   type        = string
   description = "CI が Application Credential 発行等に使う Keystone ユーザー名。このプロジェクトに member ロールを付与する（lc_cloud.tf 参照）"
