@@ -1,0 +1,34 @@
+# このファイルを terraform.tfvars にコピーして値を入力する
+# terraform.tfvars は .gitignore 済み（コミットしないこと）
+
+project_id = "main-vcompute"
+# region / zone は既定（asia-northeast1 / asia-northeast1-a）のままで良ければ省略可
+
+# OpenStack(DevStack) の admin パスワード。openssl rand -base64 24 などで生成する
+devstack_admin_password = "<generate-me>"
+
+# IAP トンネルを許可するユーザー。ここに入れないと start-tunnels.sh が使えない
+iap_tunnel_users = [
+  "user:<your-email>@example.com",
+]
+
+# --- 以下は既定値でよければ省略可 ---
+
+# DevStack VM。既定は n2-highmem-4 (4vCPU/32GB)。
+# local と完全に同じにするなら n2-standard-4、CPU も倍にするなら n2-standard-8。
+# devstack_machine_type      = "n2-highmem-4"
+# devstack_boot_disk_size_gb = 150
+
+# platform VM（k3s + Authentik + Harbor）
+# platform_machine_type = "e2-standard-4"
+
+# Harbor が要らなければ false（bootstrap が約10分短くなる）
+# enable_harbor = true
+
+# Authentik / Harbor のパスワードは未指定なら Terraform が生成し、
+# terraform output -json credentials で取り出せる
+# authentik_bootstrap_password = ""
+# harbor_admin_password        = ""
+
+# IAP トンネルが何分途切れたら自動停止するか。0 で無効
+# idle_shutdown_minutes = 45
