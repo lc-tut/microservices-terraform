@@ -29,9 +29,10 @@ OpenStack(DevStack) と Authentik・Harbor・Middleware API を建て、
  │                      │ │ │ │ │   CloudKitty(Ceilometer   │
  │ Authentik      :9000 ◀┘ │ │ │ │     + Gnocchi)           │
  │ lcn-infra-api  :8081 ◀──┘ │ │ │   Trove + Barbican       │
- │   api / worker / recon    │ │ │   Designate  Octavia     │
- │   + Postgres              │ │ │   Manila (LVM)           │
- │ Harbor         :8080 ◀────┘ │ └───────────────────────────┘
+ │   api / worker / recon    │ │ │                           │
+ │   + Postgres              │ │ │   仮の VPC Gateway router │
+ │ Harbor         :8080 ◀────┘ │ │   + subnetpool            │
+ │                             │ └───────────────────────────┘
  └──────────────────────────┘  │            ▲
               │                              │
               └──── VPC 内で直接（10.20.0.10）┘
@@ -64,7 +65,7 @@ API に 401 で弾かれます。
 
 ### なぜ VM を2台に分けているか
 
-DevStack のクリーン構築はフル構成で 60〜90 分かかります。1台に同居させると、
+DevStack のクリーン構築は 40〜50 分かかります。1台に同居させると、
 作り直すたびに Authentik と Middleware API まで巻き込んで落ちます。
 
 ---
@@ -99,8 +100,7 @@ terraform -chdir=staging/gcp output dns_records
 
 ### bootstrap の完了を待つ
 
-DevStack 側はフル構成で **60〜90 分**、platform 側は 10〜15 分かかります。
-一番長いのは Octavia の amphora イメージ構築（diskimage-builder、20〜30 分）です。
+DevStack 側は **40〜50 分**、platform 側は 10〜15 分かかります。
 
 ```bash
 gcloud compute ssh lc-staging-devstack --tunnel-through-iap \
@@ -215,46 +215,86 @@ terraform -chdir=staging/gcp destroy
 
 | | devstack | platform | 合計 |
 | --- | ---: | ---: | ---: |
-| 24/7 | ¥43,803 | ¥22,621 | **¥66,424/月** |
-| 毎日 9-23 時 | ¥27,702 | ¥14,196 | **¥41,898/月** |
-| 平日 8h/日 | ¥15,030 | ¥7,564 | **¥22,594/月** |
-| 3日間だけ建てて destroy | ¥4,320 | ¥2,231 | **¥6,551** |
+| 24/7 | ¥42,768 | ¥22,621 | **¥65,389/月** |
+| 毎日 9-23 時 | ¥26,667 | ¥14,196 | **¥40,863/月** |
+| 平日 8h/日 | ¥13,994 | ¥7,564 | **¥21,558/月** |
+| 3日間だけ建てて destroy | ¥4,218 | ¥2,231 | **¥6,449** |
 
-devstack = n2-highmem-4 (4vCPU/32GB) + 200GB、platform = e2-standard-4 + 50GB。
-停止中もディスク（月 5,180 円）と静的 IP（月 1,745 円/個）はかかります。
+devstack = n2-highmem-4 (4vCPU/32GB) + 150GB、platform = e2-standard-4 + 50GB。
+停止中もディスク（月 4,144 円）と静的 IP（月 1,745 円/個）はかかります。
 
 DevStack のスペックを変える場合（24/7・ディスクと IP 込み）:
 
 | | 24/7 |
 | --- | ---: |
-| n2-standard-4 (4vCPU/16GB) — local と同一 | ¥33,716 |
-| **n2-highmem-4 (4vCPU/32GB) — 既定** | ¥43,803 |
-| n2-standard-8 (8vCPU/32GB) | ¥62,706 |
+| n2-standard-4 (4vCPU/16GB) — local と同一 | ¥32,680 |
+| **n2-highmem-4 (4vCPU/32GB) — 既定** | ¥42,768 |
+| n2-standard-8 (8vCPU/32GB) | ¥61,670 |
 
 先に詰まるのは CPU ではなく RAM（Nova のゲスト VM に加えて Trove・
-CloudKitty・Gnocchi・Octavia の amphora が常駐する）ため、vCPU は local と
-同じ 4 のままメモリだけ倍にしています。
-
-> **フル構成でゲストを同時に動かすと 32GB は苦しくなります。**
-> Octavia の amphora・Manila・Trove のゲストを一度に立てるなら
-> `devstack_machine_type = "n2-highmem-8"` (8vCPU/64GB) を検討してください
-> （24/7 で ¥82,881/月）。
+CloudKitty・Gnocchi が常駐する）ため、vCPU は local と同じ 4 のまま
+メモリだけ倍にしています。
 
 ---
 
-## サービス構成を削る
+## OpenStack のサービス構成
 
-フル構成は `stack.sh` の所要時間を押し上げます。要らないものは
-`terraform.tfvars` で落とせます。
+**本番に寄せられるものは寄せ、重いもの・未検証のものは既定で切って**います。
+実機 Polaris の Service Catalog（2026-09-04 時点）は
+`cloudkitty / heat / placement / keystone / glance / neutron / cinder / nova`
+だけで、Designate・Octavia・Manila・Swift・Trove は入っていません。
 
-| 変数 | 落とすと |
-| --- | --- |
-| `enable_octavia` | **20〜30 分短くなる**（amphora イメージ構築が消える） |
-| `enable_trove` | ゲストイメージ（約 1.4GB）の取得が消える |
-| `enable_manila` | LVM バックエンドの用意が消える |
-| `enable_designate` | bind9 が消える |
-| `enable_heat` | — |
-| `enable_telemetry` | CloudKitty / Ceilometer / Gnocchi が消える（課金の検証はできなくなる） |
+| 変数 | 既定 | 理由 |
+| --- | --- | --- |
+| `enable_telemetry` | **on** | 本番にある。CloudKitty のルールをこのリポジトリが管理している |
+| `enable_heat` | **on** | 本番にある |
+| （Swift） | **on** | Glance のバックエンド。`local/` で動作実績がある |
+| `enable_trove` | **on** | `local/` で動作実績がある。`modules/lc-db` の検証に要る |
+| `enable_designate` | off | staging では DNS を扱わない。本番にも無い |
+| `enable_octavia` | off | amphora イメージ構築だけで 20〜30 分。LB 1つごとにゲスト VM が増える |
+| `enable_manila` | off | 本番に無く、ドライバ選定から詰める必要がある |
+
+切っている3つは `true` にできますが、**どれも実機で未検証**です。
+`stack.sh` が落ちたら、まずここを疑ってください。
+Octavia を有効にするなら `devstack_boot_disk_size_gb` を 200 に上げてください。
+
+## ネットワークと Security Group
+
+**本番と同じ形にしてあるもの**:
+
+- **Security Group は `modules/lc-vm` が VM ごとに1つ作ります**
+  （`<name>-sg`、プロジェクトサブネットからの SSH と ICMP、
+  加えて `security_group_rules` で渡した分）。staging 固有の差はありません。
+- **VM を建てても Floating IP は払い出されません。** `modules/lc-vm` は
+  Floating IP のリソースを一切持たず、VM はプロジェクトネットワーク上の
+  固定 IP だけを持ちます。外向きの通信は VPC Gateway ルーター経由の SNAT です。
+  （`catalog/projects/_template` が発行する CI 用 Application Credential の
+  access rules には `/v2.0/floatingips` が含まれていますが、これは
+  「API で取れる」だけで、Terraform が自動で取ることはありません。）
+- ルーターは**全プロジェクトで1本**に集約します。人数分の router interface を
+  張らないのは本番と同じ設計判断です（`platform/members/personal_projects.tf`）。
+
+**staging 固有のもの**:
+
+本番では VPC Gateway ルーターと IP 帯域マスタープール（subnetpool）は
+OpenStack 管理者が手で用意した既存インフラで、
+`terraform/platform/openstack/network/` からはコードごと外されています
+（コミット `644bd74`）。staging には用意してくれる管理者がいないので、
+**仮のものを `staging/openstack/` で作ります**。
+
+```bash
+staging/terraform/tf.sh staging/openstack apply
+terraform -chdir=staging/openstack output
+```
+
+出てくる `vpc_gateway_router_id` と `subnetpool_id` を
+`catalog/projects/<p>/` の変数に渡してください。本番と同じ形を再現するのが
+目的ではなく、`catalog/projects/` が動くのに必要な受け皿を置くだけなので、
+帯域も名前も本番の値とは揃えていません（`10.100.0.0/16` を `/24` ずつ切り出す）。
+
+外部ネットワークは DevStack が作る `public` をそのまま使います
+（本番は `ext-net`）。`staging/terraform/platform-openstack-network.tfvars`
+がその差を吸収します。
 
 ---
 
@@ -272,8 +312,13 @@ DevStack 側は `local/gcp-devstack/` と同じ土台なので、そこで踏ん
 
 staging 固有:
 
-- **Designate・Octavia・Manila の構成は実機で未検証です。** 実機 Polaris に
-  存在しないサービスなので、このリポジトリにも前例がありません。
-  `stack.sh` が落ちたら、まずその3つを `false` にして切り分けてください。
+- **Designate・Octavia・Manila は既定で無効です。** 実機 Polaris に存在せず、
+  このリポジトリにも前例がありません。有効にして `stack.sh` が落ちたら、
+  まずその3つを `false` に戻して切り分けてください。
+- `platform/openstack/network/` を staging に apply すると、`public` に対する
+  `access_as_external` の RBAC ポリシーを新規作成しようとします。DevStack は
+  同じものを既に持っているため重複で失敗します。本番と同じく
+  `terraform import` で既存のものを取り込んでください
+  （本番側の事情は `terraform/platform/openstack/network/README.md`）。
 - Authentik を `https://auth.<zone>` 以外の名前で開いてログインすると、
   発行されるトークンの `iss` が変わり API に 401 で弾かれます。

@@ -25,8 +25,19 @@ if [ $# -lt 2 ]; then
 fi
 
 ROOT="$1"; shift
-ROOT_DIR="$REPO_ROOT/terraform/$ROOT"
-[ -d "$ROOT_DIR" ] || { echo "root が見つかりません: $ROOT_DIR" >&2; exit 1; }
+# terraform/ 配下の root（本番と共用。workspace で state を分ける）と、
+# staging/ 配下の staging 専用 root（本番に対応物が無い）の両方を受ける
+if [ -d "$REPO_ROOT/terraform/$ROOT" ]; then
+  ROOT_DIR="$REPO_ROOT/terraform/$ROOT"
+  USE_WORKSPACE=1
+elif [ -d "$REPO_ROOT/$ROOT" ]; then
+  ROOT_DIR="$REPO_ROOT/$ROOT"
+  # staging 専用の root は state がそもそも分かれているので workspace は使わない
+  USE_WORKSPACE=0
+else
+  echo "root が見つかりません: terraform/$ROOT にも $ROOT にもありません" >&2
+  exit 1
+fi
 
 # ---- staging の接続先を staging/gcp の output から組み立てる ----
 GCP_DIR="$REPO_ROOT/staging/gcp"
@@ -80,12 +91,17 @@ export TF_VAR_os_auth_url="$OS_URL"
 # ---- workspace ----
 cd "$ROOT_DIR"
 terraform init -input=false >/dev/null
-terraform workspace select -or-create "$WORKSPACE" >/dev/null
 
-CURRENT="$(terraform workspace show)"
-if [ "$CURRENT" != "$WORKSPACE" ]; then
-  echo "workspace が $WORKSPACE になりませんでした（今: $CURRENT）。中断します" >&2
-  exit 1
+if [ "$USE_WORKSPACE" = 1 ]; then
+  terraform workspace select -or-create "$WORKSPACE" >/dev/null
+
+  CURRENT="$(terraform workspace show)"
+  if [ "$CURRENT" != "$WORKSPACE" ]; then
+    echo "workspace が $WORKSPACE になりませんでした（今: $CURRENT）。中断します" >&2
+    exit 1
+  fi
+else
+  WORKSPACE="(staging 専用 root)"
 fi
 
 # ---- staging 用の tfvars（あれば渡す） ----

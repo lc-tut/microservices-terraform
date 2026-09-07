@@ -66,24 +66,34 @@ variable "devstack_boot_disk_size_gb" {
   description = <<-EOT
     DevStack VM のブートディスク。DevStack のソース・Glance のイメージ・
     Cinder/Swift/Manila のループバック領域を含む。
-    フル構成（Octavia の amphora イメージと Trove のゲストイメージを含む）で
-    200GB を見ている。サービスを削るなら 150GB でも足りる。
+    既定のサービス構成（Trove のゲストイメージを含む）で 150GB を見ている。
+    Octavia を有効にするなら amphora イメージのぶん 200GB は要る。
   EOT
   type        = number
-  default     = 200
+  default     = 150
 }
 
 # --- DevStack のサービス構成 ---
 #
-# 既定はフル構成。実機 Polaris の Service Catalog（2026-09-04 時点で
-# cloudkitty / heat / placement / keystone / glance / neutron / cinder / nova）に
-# 加えて、Phase 8・9 が待っている Designate と Octavia、13/12 が参照している
-# Manila も入れている。staging で先に動かせれば、実機導入を待たずに
-# catalog/ とモジュールの実装を進められる。
+# 方針: **本番に寄せられるものは寄せ、重いもの・未検証のものは既定で切る。**
 #
-# **どれも stack.sh の所要時間と RAM を押し上げる。** 特に Octavia は
-# amphora イメージを diskimage-builder で作るため、単体で 20〜30 分かかる。
-# 使わないものは false にすること。
+# 実機 Polaris の Service Catalog（2026-09-04 時点）は
+#   cloudkitty / heat / placement / keystone / glance / neutron / cinder / nova
+# のみで、Designate・Octavia・Manila・Swift・Trove は入っていない。
+#
+# 既定で入れるもの（本番にあるか、local/ で動作実績があるもの）:
+#   Telemetry(CloudKitty + Ceilometer + Gnocchi)  本番にある。09-costs.md の検証に要る
+#   Heat                                          本番にある
+#   Swift                                         Glance のバックエンド。local/ で実績あり
+#   Trove + Barbican                              local/ で動作実績あり。modules/lc-db の検証に要る
+#
+# 既定で切るもの（本番に無く、staging でも前例が無いもの）:
+#   Designate  DNS は staging では扱わない
+#   Octavia    amphora イメージ構築だけで 20〜30 分。LB 1つごとにゲスト VM が増える
+#   Manila     ドライバ選定から詰める必要がある
+#
+# 切っている3つを使いたくなったら true にできるが、**どれも実機で未検証**。
+# stack.sh が落ちたら、まずここを疑うこと。
 
 variable "enable_telemetry" {
   description = "Ceilometer + Gnocchi + CloudKitty。modules/cloudkitty-service と 09-costs.md の検証に要る"
@@ -105,34 +115,33 @@ variable "enable_heat" {
 
 variable "enable_designate" {
   description = <<-EOT
-    Designate (DNSaaS)。16-implementation-phases.md の Phase 8 が待っているもの。
-    実機 Polaris には未導入だが、staging に入れておけば実装を先行できる。
-    bind9 をバックエンドとして同居させる。
+    Designate (DNSaaS)。**既定で無効。** staging では DNS を扱わない。
+    実機 Polaris にも未導入で（Phase 8 待ち）、staging に入れても
+    比較対象になる本番の姿が無い。
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_octavia" {
   description = <<-EOT
-    Octavia (LBaaS)。Phase 9 が待っているもの。
-
-    **stack.sh が最も長くなる原因。** amphora イメージを diskimage-builder で
-    構築するため 20〜30 分余計にかかり、ディスクも数 GB 使う。さらに LB を1つ
-    作るたびに amphora VM（1GB 前後）が起動する。
+    Octavia (LBaaS)。**既定で無効。** Phase 9 が待っているものだが、
+    stack.sh が最も長くなる原因でもある。amphora イメージを
+    diskimage-builder で構築するため 20〜30 分余計にかかり、ディスクも
+    数 GB 使う。さらに LB を1つ作るたびに amphora VM（1GB 前後）が起動する。
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_manila" {
   description = <<-EOT
-    Manila (Shared File System)。12/13 が参照している。
-    ドライバは LVM を使う（既定の generic ドライバはサービス VM を要求し、
-    Trove・Octavia と合わせると 32GB では苦しいため）。
+    Manila (Shared File System)。**既定で無効。** 12/13 が参照しているが
+    実機には未導入で、ドライバ選定（LVM か generic か）から詰める必要がある。
+    有効にする場合は LVM ドライバを使う（generic はサービス VM を要求する）。
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "devstack_admin_password" {
