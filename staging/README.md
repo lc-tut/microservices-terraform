@@ -30,7 +30,7 @@ OpenStack(DevStack) と Authentik・Harbor・Middleware API を建て、
  │ Authentik      :9000 ◀┘ │ │ │ │     + Gnocchi)           │
  │ lcn-infra-api  :8081 ◀──┘ │ │ │   Trove + Barbican       │
  │   api / worker / recon    │ │ │                           │
- │   + Postgres              │ │ │   仮の VPC Gateway router │
+ │   + Postgres              │ │ │   internal-net / int-router│
  │ Harbor         :8080 ◀────┘ │ │   + subnetpool            │
  │                             │ └───────────────────────────┘
  └──────────────────────────┘  │            ▲
@@ -263,16 +263,123 @@ Octavia を有効にするなら `devstack_boot_disk_size_gb` を 200 に上げ�
 **本番と同じ形にしてあるもの**:
 
 - **Security Group は `modules/lc-vm` が VM ごとに1つ作ります**
-  （`<name>-sg`、プロジェクトサブネットからの SSH と ICMP、
-  加えて `security_group_rules` で渡した分）。staging 固有の差はありません。
+  （`<name>-sg`。SSH と ICMP を `remote_group_id` = 同じ SG のメンバーからだけ
+  許可し、加えて `security_group_rules` で渡した分）。`internal-net` は
+  全プロジェクト共有の L2 一枚なので、サブネット CIDR で絞ると他プロジェクトの
+  VM まで通ってしまう——テナント境界を担っているのはこの SG です。
+  staging 固有の差はありません。
 - **VM を建てても Floating IP は払い出されません。** `modules/lc-vm` は
-  Floating IP のリソースを一切持たず、VM はプロジェクトネットワーク上の
-  固定 IP だけを持ちます。外向きの通信は VPC Gateway ルーター経由の SNAT です。
+  Floating IP のリソースを一切持たず、VM は載せたネットワーク上の固定 IP だけを
+  持ちます。外向きの通信は `int-router` 経由の SNAT です。
   （`catalog/projects/_template` が発行する CI 用 Application Credential の
   access rules には `/v2.0/floatingips` が含まれていますが、これは
   「API で取れる」だけで、Terraform が自動で取ることはありません。）
-- ルーターは**全プロジェクトで1本**に集約します。人数分の router interface を
-  張らないのは本番と同じ設計判断です（`platform/members/personal_projects.tf`）。
+- 外向き通信は経路を問わず **`int-router` 1本**に集約します。プロジェクト個別の
+  NAT・独自 LB は禁止で、これは本番と同じ設計判断です
+  （`documents/terraform/12-openstack-resources.md`）。
+
+**staging 固有のもの**:
+
+外部ネットワークだけは DevStack が作る `public` をそのまま使います（本番は
+`ext-net`）。`internal-net` / `int-subnet` / `int-router` / subnetpool は
+`terraform/platform/openstack/network/` が**本番と同じコードで作ります**。
+
+```bash
+staging/terraform/tf.sh platform/openstack/network plan
+```
+
+ただし DevStack は `public` に `public-subnet` を既に作っているため、
+`ext-subnet` の新規作成は CIDR の重複で失敗します。`access_as_external` の
+RBAC ポリシーも同じく既存のものがあります。**どちらも import して管理下に
+置いてください**（本番で RBAC ポリシーを import するのと同じ形です）。
+手順は `staging/terraform/platform-openstack-network.tfvars` のコメントにあります。
+
+import 後の `plan` が空になるまで、その tfvars の値を実機に合わせて直します。
+
+## 4. 停止・破棄
+
+公開している場合、**アイドル自動停止は既定で無効**です。判定材料が SSH の
+有無しかなく、ブラウザや API から使われている最中でも止めてしまうためです。
+時刻で絞りたい場合は `daily_start_time` / `daily_stop_time` を設定してください
+（アクセスの有無は見ないので、使っている最中でも止まります）。
+
+```bash
+gcloud compute instances stop lc-staging-devstack lc-staging-platform \
+  --zone=asia-northeast1-a
+terraform -chdir=staging/gcp destroy
+```
+
+**止めるだけではディスクと静的 IP の課金が残ります**（250GB の pd-balanced で
+月 5,180 円、静的 IP は停止中 月 1,745 円/個）。しばらく使わないなら destroy してください。
+
+---
+
+## 費用（asia-northeast1・税別・Cloud Billing Catalog の実価格）
+
+| | devstack | platform | 合計 |
+| --- | ---: | ---: | ---: |
+| 24/7 | ¥42,768 | ¥22,621 | **¥65,389/月** |
+| 毎日 9-23 時 | ¥26,667 | ¥14,196 | **¥40,863/月** |
+| 平日 8h/日 | ¥13,994 | ¥7,564 | **¥21,558/月** |
+| 3日間だけ建てて destroy | ¥4,218 | ¥2,231 | **¥6,449** |
+
+devstack = n2-highmem-4 (4vCPU/32GB) + 150GB、platform = e2-standard-4 + 50GB。
+停止中もディスク（月 4,144 円）と静的 IP（月 1,745 円/個）はかかります。
+
+DevStack のスペックを変える場合（24/7・ディスクと IP 込み）:
+
+| | 24/7 |
+| --- | ---: |
+| n2-standard-4 (4vCPU/16GB) — local と同一 | ¥32,680 |
+| **n2-highmem-4 (4vCPU/32GB) — 既定** | ¥42,768 |
+| n2-standard-8 (8vCPU/32GB) | ¥61,670 |
+
+先に詰まるのは CPU ではなく RAM（Nova のゲスト VM に加えて Trove・
+CloudKitty・Gnocchi が常駐する）ため、vCPU は local と同じ 4 のまま
+メモリだけ倍にしています。
+
+---
+
+## OpenStack のサービス構成
+
+**本番に寄せられるものは寄せ、重いもの・未検証のものは既定で切って**います。
+実機 Polaris の Service Catalog（2026-09-04 時点）は
+`cloudkitty / heat / placement / keystone / glance / neutron / cinder / nova`
+だけで、Designate・Octavia・Manila・Swift・Trove は入っていません。
+
+| 変数 | 既定 | 理由 |
+| --- | --- | --- |
+| `enable_telemetry` | **on** | 本番にある。CloudKitty のルールをこのリポジトリが管理している |
+| `enable_heat` | **on** | 本番にある |
+| （Swift） | **on** | Glance のバックエンド。`local/` で動作実績がある |
+| `enable_trove` | **on** | `local/` で動作実績がある。`modules/lc-db` の検証に要る |
+| `enable_designate` | off | staging では DNS を扱わない。本番にも無い |
+| `enable_octavia` | off | amphora イメージ構築だけで 20〜30 分。LB 1つごとにゲスト VM が増える |
+| `enable_manila` | off | 本番に無く、ドライバ選定から詰める必要がある |
+
+切っている3つは `true` にできますが、**どれも実機で未検証**です。
+`stack.sh` が落ちたら、まずここを疑ってください。
+Octavia を有効にするなら `devstack_boot_disk_size_gb` を 200 に上げてください。
+
+## ネットワークと Security Group
+
+**本番と同じ形にしてあるもの**:
+
+- **Security Group は `modules/lc-vm` が VM ごとに1つ作ります**
+  （`<name>-sg`。SSH と ICMP を `remote_group_id` = 同じ SG のメンバーからだけ
+  許可し、加えて `security_group_rules` で渡した分）。`internal-net` は
+  全プロジェクト共有の L2 一枚なので、サブネット CIDR で絞ると他プロジェクトの
+  VM まで通ってしまう——テナント境界を担っているのはこの SG です。
+  staging 固有の差はありません。
+- **VM を建てても Floating IP は払い出されません。** `modules/lc-vm` は
+  Floating IP のリソースを一切持たず、VM は載せたネットワーク上の固定 IP だけを
+  持ちます。外向きの通信は `int-router` 経由の SNAT です。
+  （`catalog/projects/_template` が発行する CI 用 Application Credential の
+  access rules には `/v2.0/floatingips` が含まれていますが、これは
+  「API で取れる」だけで、Terraform が自動で取ることはありません。）
+- 外向き通信は経路を問わず **`int-router` 1本**に集約します。プロジェクト個別の
+  NAT・独自 LB は禁止で、これは本番と同じ設計判断です
+  （`documents/terraform/12-openstack-resources.md`）。
 
 **staging 固有のもの**:
 
@@ -315,10 +422,10 @@ staging 固有:
 - **Designate・Octavia・Manila は既定で無効です。** 実機 Polaris に存在せず、
   このリポジトリにも前例がありません。有効にして `stack.sh` が落ちたら、
   まずその3つを `false` に戻して切り分けてください。
-- `platform/openstack/network/` を staging に apply すると、`public` に対する
+- `platform/openstack/network/` を staging に apply すると、`ext-subnet` と
   `access_as_external` の RBAC ポリシーを新規作成しようとします。DevStack は
-  同じものを既に持っているため重複で失敗します。本番と同じく
-  `terraform import` で既存のものを取り込んでください
-  （本番側の事情は `terraform/platform/openstack/network/README.md`）。
+  どちらも既に持っているため失敗します。`terraform import` で取り込んでください
+  （手順は `staging/terraform/platform-openstack-network.tfvars`。
+  本番側の事情は `terraform/platform/openstack/network/README.md`）。
 - Authentik を `https://auth.<zone>` 以外の名前で開いてログインすると、
   発行されるトークンの `iss` が変わり API に 401 で弾かれます。
