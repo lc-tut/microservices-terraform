@@ -7,19 +7,46 @@ project_id = "main-vcompute"
 # OpenStack(DevStack) の admin パスワード。openssl rand -base64 24 などで生成する
 devstack_admin_password = "<generate-me>"
 
-# IAP トンネルを許可するユーザー。ここに入れないと start-tunnels.sh が使えない
+# IAP トンネルを許可するユーザー。公開設定に関わらず SSH は IAP 経由のみ
 iap_tunnel_users = [
   "user:<your-email>@example.com",
 ]
 
-# --- 以下は既定値でよければ省略可 ---
+# ---- 公開設定 ----
+# dns_zone を設定すると platform VM が Caddy 経由でインターネットに公開される。
+#   auth.<zone>      Authentik（OIDC の issuer になる）
+#   infra.<zone>     lcn-infra-api
+#   harbor.<zone>    Harbor
+#   openstack.<zone> DevStack（下の allowed_source_ranges を設定したときだけ）
+#
+# apply したあと terraform output dns_records の内容で A レコードを作ること。
+# 作るまで Let's Encrypt の証明書が発行されず HTTPS は繋がらない。
+dns_zone   = "staging.lcn.ad.jp"
+acme_email = "<ops-address>@example.com"
+
+# DevStack は平文 HTTP で公開されるため、送信元 CIDR で絞る。
+# 空にすると公開されず、IAP トンネル経由だけになる。
+# **資格情報が経路上で読める。信頼できる回線の CIDR だけを入れること。**
+devstack_allowed_source_ranges = [
+  # "203.0.113.0/24",
+]
+
+# Harbor を素のポート(8080)でも開けたいときだけ。
+# 通常は Caddy 経由の https://harbor.<zone> で足りるので空のままでよい
+harbor_allowed_source_ranges = []
+
+# ---- 以下は既定値でよければ省略可 ----
+
+# Middleware API の OIDC クライアント ID。
+# terraform/platform/idp/ の middleware_oidc_client_id と揃えること
+# oidc_client_id = "lcn-api"
 
 # DevStack VM。既定は n2-highmem-4 (4vCPU/32GB)。
-# local と完全に同じにするなら n2-standard-4、CPU も倍にするなら n2-standard-8。
+# local と完全に同じにするなら n2-standard-4、CPU も倍にするなら n2-standard-8
 # devstack_machine_type      = "n2-highmem-4"
 # devstack_boot_disk_size_gb = 150
 
-# platform VM（k3s + Authentik + Harbor）
+# platform VM（Authentik + Caddy + Harbor + Middleware API）
 # platform_machine_type = "e2-standard-4"
 
 # Harbor が要らなければ false（bootstrap が約10分短くなる）
@@ -30,5 +57,7 @@ iap_tunnel_users = [
 # authentik_bootstrap_password = ""
 # harbor_admin_password        = ""
 
-# IAP トンネルが何分途切れたら自動停止するか。0 で無効
+# IAP トンネル（SSH）が何分途切れたら自動停止するか。0 で無効。
+# **公開している場合は注意**: 誰かがブラウザで使っていても SSH が無ければ
+# 停止する。常時起動させたいなら 0 にすること
 # idle_shutdown_minutes = 45

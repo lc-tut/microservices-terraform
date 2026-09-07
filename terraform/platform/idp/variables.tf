@@ -132,3 +132,20 @@ variable "smtp_from_address" {
   description = "メール送信元アドレス"
   default     = ""
 }
+
+# Middleware API（lcn-infra-api / lcn-billing-api）用 OIDC プロバイダ。
+# 空文字のままにするとプロバイダは作成されない
+variable "middleware_oidc_client_id" {
+  type        = string
+  default     = ""
+  description = "Middleware API の client_id 兼 audience 兼 application slug。staging/gcp の oidc_client_id と揃えること"
+}
+
+variable "middleware_oidc_redirect_uris" {
+  type        = list(string)
+  default     = []
+  description = <<-EOT
+    OIDC のリダイレクト先。SPA と CLI のコールバック URL を列挙する。
+    例: ["https://console.staging.lcn.ad.jp/oauth/callback", "http://localhost:8888/callback"]
+  EOT
+}
