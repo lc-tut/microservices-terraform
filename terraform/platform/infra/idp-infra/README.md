@@ -14,7 +14,7 @@ Kubernetes 基盤が無いため、**単一 VM + Docker Compose** で最小構�
 
 | リソース | 内容 |
 |---|---|
-| `openstack_compute_instance_v2.authentik` | `rocky-10` / `m1.medium`(4GB/2vCPU) / boot-from-volume 40GB / `lc-dev-net` |
+| `openstack_compute_instance_v2.authentik` | `rocky-10` / `m1.medium`(4GB/2vCPU) / boot-from-volume 40GB / `internal-net` |
 | `openstack_networking_secgroup_v2.authentik` + rules | 22 / 9000 / 9443 / ICMP を許可 |
 | `openstack_networking_floatingip_v2` + associate | `ext-net`（192.168.1.0/24）から採番 |
 | `data.openstack_compute_keypair_v2.authentik` | 既存 keypair `authentik-idp` を参照のみ（下記「keypair について」参照） |

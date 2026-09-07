@@ -10,13 +10,14 @@
 # クォータを既定から変えたい人だけが catalog/billing-accounts/personal/<lcn_id>/
 # を作ります（そちらは data source で project を引くだけ）。
 #
-# 既定は最小構成です。ネットワーク・サブネット・router interface・
-# Application Credential は作りません。理由は 2 つあります。
-#   - 外向き通信は単一の VPC Gateway router に集約する設計のため、
-#     人数分の router interface を張ると最初にそこが詰まる
-#   - Application Credential は 1 つあたり約 40 本の access rule を持つため、
-#     人数分作ると access rule が数千本になる
-# 個人でネットワークが必要になったら、そのとき申請して足します。
+# 既定は最小構成です。ネットワークはそもそもプロジェクトごとに作らず、
+# 全員が platform/openstack/network/ の共有 internal-net を使います。
+# Application Credential も作りません（1 つあたり約 40 本の access rule を
+# 持つため、人数分作ると数千本になる）。必要になったら申請して足します。
+#
+# 個人 project の VM は Neutron の default SG（同一 project 内からの ingress
+# のみ許可）に守られます。共有 internal-net 上でも他人の project からは
+# 届きません。詳細は platform/openstack/network/README.md を参照。
 
 locals {
   # active のみ。ob-og / alumni になったら project ごと消える。

@@ -1,12 +1,10 @@
-# network/subnet は catalog/projects/<project_name>/ が作成済みのものを参照する
+# 載せるネットワークは名前で解決する。subnet は指定しない——1つの network に
+# subnet が複数ぶら下がっていても（/26 を使い切ったチームがブロックを追加した
+# 場合など）、Nova が空きのある subnet から自動で採番する。
 # (openstack_networking_port_v2 の明示作成は禁止方針のため、instance の
 # network{} ブロックで暗黙ポートを使う。12-openstack-resources.md 参照)。
 data "openstack_networking_network_v2" "project" {
-  name = var.project_name
-}
-
-data "openstack_networking_subnet_v2" "project" {
-  name = var.project_name
+  name = var.network_name
 }
 
 data "openstack_compute_flavor_v2" "this" {
@@ -23,24 +21,26 @@ resource "openstack_networking_secgroup_v2" "this" {
   description = "modules/lc-vm が ${var.name} 用に作成"
 }
 
+# internal-net は全プロジェクト共有なので、subnet CIDR で絞ると他プロジェクトの
+# VM まで許可してしまう。同じ SG のメンバーからだけ許可する。
 resource "openstack_networking_secgroup_rule_v2" "ssh" {
-  count             = var.allow_ssh_from_project_subnet ? 1 : 0
+  count             = var.allow_ssh_from_same_group ? 1 : 0
   security_group_id = openstack_networking_secgroup_v2.this.id
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 22
   port_range_max    = 22
-  remote_ip_prefix  = data.openstack_networking_subnet_v2.project.cidr
+  remote_group_id   = openstack_networking_secgroup_v2.this.id
 }
 
 resource "openstack_networking_secgroup_rule_v2" "icmp" {
-  count             = var.allow_ssh_from_project_subnet ? 1 : 0
+  count             = var.allow_ssh_from_same_group ? 1 : 0
   security_group_id = openstack_networking_secgroup_v2.this.id
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "icmp"
-  remote_ip_prefix  = data.openstack_networking_subnet_v2.project.cidr
+  remote_group_id   = openstack_networking_secgroup_v2.this.id
 }
 
 resource "openstack_networking_secgroup_rule_v2" "extra" {

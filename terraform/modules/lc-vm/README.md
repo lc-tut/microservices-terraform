@@ -9,8 +9,10 @@ Phase 5・`documents/terraform/12-openstack-resources.md`「モジュールラ�
 
 ## 前提
 
-- 呼び出し元(`workspaces/<name>/`)が動く project に、`catalog/projects/<name>/` が
-  作成した同名の network/subnet が存在すること(`var.project_name` で解決)。
+- 載せるネットワークを `var.network_name` で指定すること。チームプロジェクトの
+  workspace は `catalog/projects/<name>/` の `terraform output -raw network_name`
+  を渡す。既定値 (`internal-net`) は platform 自身の VM と個人 project 向け。
+  subnet は指定しない（network に subnet が複数あっても Nova が空きから採番する）。
 - `openstack_compute_keypair_v2` は使わない方針(SSH は CLI 発行の短命証明書)。
   そのため `var.ssh_ca_public_key` に CA 公開鍵を渡す必要がある
   （`platform/openstack/images` の output `ssh_ca_public_key_openssh`。
@@ -25,7 +27,6 @@ Phase 5・`documents/terraform/12-openstack-resources.md`「モジュールラ�
 module "app" {
   source            = "../../modules/lc-vm"
   name              = "my-app"
-  project_name      = "my-product"
   flavor            = "m1.medium"
   image             = "ubuntu-24.04"
   volume_size_gb    = 40
@@ -67,8 +68,10 @@ module "app" {
   `platform/openstack/images/ssh_ca.tf` のコメントにあった
   「Phase 5 modules/lc-vm 側の cloud-init の責務（未実装）」を解消するもの。
 - **明示的な `openstack_networking_port_v2` は作らない**
-  （VPC Gateway 強制方針のため禁止。`12-openstack-resources.md` 参照）。
+  （出口ルーター強制方針のため禁止。`12-openstack-resources.md` 参照）。
   instance の `network{}` ブロックが暗黙ポートを作る。
-- **`allow_ssh_from_project_subnet`**（既定 true）は同一プロジェクト subnet
-  からの SSH/ICMP のみを許可する最小限のデフォルト。フロート IP 経由で
-  外部公開する場合や追加ポートは `var.security_group_rules` で明示する。
+- **`allow_ssh_from_same_group`**（既定 true）は同じ SG のメンバーからの
+  SSH/ICMP のみを許可する最小限のデフォルト。internal-net は全プロジェクト
+  共有なので subnet CIDR では絞れず、`remote_group_id` で絞っている。
+  フロート IP 経由で外部公開する場合や追加ポートは
+  `var.security_group_rules` で明示する。

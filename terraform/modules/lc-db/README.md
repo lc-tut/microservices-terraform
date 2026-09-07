@@ -18,8 +18,9 @@
   このモジュールは Trove 側のデータストア登録（`trove-manage
   datastore_version_update` 済み）が終わった状態を前提に、
   「プロジェクトが Trove インスタンスを作る」部分だけを扱う。
-- 呼び出し元(`workspaces/<name>/`)が動く project に、`catalog/projects/<name>/` が
-  作成した同名の network が存在すること(`var.project_name` で解決)。
+- 載せるネットワークを `var.network_name` で指定すること。チームプロジェクトの
+  workspace は `catalog/projects/<name>/` の `terraform output -raw network_name`
+  を渡す。既定値 (`internal-net`) は platform 自身と個人 project 向け。
 - **`var.flavor` の disk サイズはゲストイメージのファイルサイズ以上にすること**
   （実機で確認済みの罠）。disk サイズがイメージより小さいと Nova が
   `Flavor's disk is too small for requested image` で instance-create 自体を
@@ -32,7 +33,6 @@
 module "db" {
   source            = "../../modules/lc-db"
   name              = "my-app-db"
-  project_name      = "my-product"
   flavor            = "m1.medium"
   volume_size_gb    = 10
   datastore_type    = "mysql"

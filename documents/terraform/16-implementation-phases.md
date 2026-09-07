@@ -167,19 +167,22 @@ Phase 0
 
 **作業内容**:
 
-1. `terraform/platform/openstack/network/` の実装 ✅ 実装・本番適用・実機検証済み。
-   実機確認の結果、想定と異なり VPC Gateway に相当する router
-   （`lc-dev-router`）と、外部ネットワークの共有を実現する RBAC ポリシー
-   （`access_as_external`）が共に既に存在していたため、新規作成ではなく
-   `terraform import` で両方を管理下に置いた（実インフラへの変更なし）。
-   `subnetpool`（新規追加分）のみ実際に apply 済み。`terraform plan` clean 確認済み
-   - `gateway.tf` — VPC Gateway ルーター（既存 `lc-dev-router` を import）
-   - `subnetpool.tf` — IP 帯域マスタープール（`10.0.0.0/8`、/24 固定払い出し、
-     `shared = true`）。既存の手動作成サブネット（`10.10.0.0/24`、この pool 外）
-     との衝突可能性は極めて低いことを確認済み（コメント参照）
-   - `external_network.tf` — 外部ネットワークは data 参照のみ。ただし
-     shared 属性ではなく RBAC ポリシーで全プロジェクト共有されていたため、
-     そのポリシーを import して管理下に置いた
+1. `terraform/platform/openstack/network/` の実装 ✅ 実装済み（apply 待ち）
+   - `internal_network.tf` — `internal-net` / `int-subnet`（`172.16.192.0/19`、
+     DNS `1.1.1.1`）と出口ルーター `int-router`（外部ゲートウェイ `ext-net`、
+     SNAT 有効）。platform 自身の VM と個人プロジェクトの VM がここに乗る。
+     `access_as_shared` の RBAC ポリシーで全テナントに開放する
+   - `subnetpool.tf` — チーム用の IP 帯域マスタープール
+     `lc-cloud-pool`（`172.16.224.0/19`、/26 固定払い出し、`shared = true`）。
+     アドレスはラボ側が「クラスタ内部用」として確保した `172.16.192.0/18` の
+     中だけで完結させ、SAN network `172.16.100.0/24`・ラボ側の
+     `10.200.192.0/19`・Docker 既定プールの `172.17.0.0/16` 以降には触れない
+   - `external_network.tf` — `ext-net` 自体は data 参照のみ。そこに
+     `ext-subnet`（`160.187.27.0/24`、gateway `160.187.27.1`、pool
+     `160.187.27.10`〜`160.187.27.200`、DHCP 無効）を作る。`ext-net` の shared
+     属性は false なので `access_as_external` の RBAC ポリシーで共有する
+   - テナント分離はネットワーク分割ではなく `catalog/projects/` のベースライン
+     Security Group で行う（`12-openstack-resources.md`「設計原則」参照）
 
 1. `terraform/platform/openstack/images/` の実装 ✅ 実装・本番適用・実機検証済み
    - Ubuntu 24.04 公式 cloud image を Glance に登録（`web_download` で URL から
@@ -199,8 +202,9 @@ Phase 0
    - クォータティア定義（small / medium / large）
    - `07-quota.md` の設計に従い実装
 
-**成果物**: `catalog/projects/` が subnetpool から /24 を払い出せる状態。
-Phase 3 の3項目（network・images・quotas）は全て実装・実機適用済み。
+**成果物**: `catalog/teams/` が subnetpool から /26 を払い出し、`int-router`
+に接続できる状態。images・quotas は実装・実機適用済み、network は実装済みで
+apply 待ち。
 
 ---
 
@@ -210,22 +214,24 @@ Phase 3 の3項目（network・images・quotas）は全て実装・実機適用�
 
 **前提条件**:
 
-- Phase 3 完了（subnetpool・VPC gateway が存在すること）
+- Phase 3 完了（`subnetpool`・`int-router`・`internal-net` が存在すること）
 
 **作業内容**:
 
 1. `terraform/catalog/teams/_template/` 実装 ✅
    - `authentik.tf` — Authentik グループ
    - `lc_cloud.tf` — `openstack_identity_project_v3`（Keystone project）+
-     `modules/lc-cloud-quota`。自動化アカウントへの `member` ロール付与も
+     `modules/lc-cloud-quota` + チーム専用ネットワーク（subnetpool から /26、
+     `int-router` へ接続）。自動化アカウントへの `member` ロール付与も
      ここで行う（`catalog/projects/` が Application Credential を
      セルフサービス発行するために必要。README 参照）
    - `outputs.tf` — `openstack_project_id`・`authentik_group_id`
 
 1. `terraform/catalog/projects/_template/` 実装 ✅
-   - `lc_cloud.tf` — ネットワーク・Subnet（`platform/openstack/network/` の
-     subnetpool から）・Router Interface・Application Credential
-     （Access Rules 付き、`team_project_id` にスコープしなおした provider で発行）
+   - `lc_cloud.tf` — ベースライン Security Group（プロジェクト分離）・
+     Application Credential（Access Rules 付き、`team_project_id` に
+     スコープしなおした provider で発行）。ネットワークは所属チームのものを
+     `data` で参照するだけで、この root では作らない
    - GitHub Actions Secret への自動登録は未実装（意図的に保留。下記参照）
 
 1. `terraform/catalog/billing-accounts/` テンプレート実装 ✅
@@ -234,14 +240,14 @@ Phase 3 の3項目（network・images・quotas）は全て実装・実機適用�
    - CloudKitty との連携（予算・通知）は未実装（下記参照）
 
 **成果物**: `_template` をコピーして PR を出すだけで
-OpenStack プロジェクト・ネットワーク・Application Credential が払い出される状態。
-`terraform validate` は全 template で確認済み。**`catalog/teams/`・
-`catalog/projects/` は実機 Polaris でエンドツーエンド検証済み**
-（`sandbox-test` という名前でチーム・プロジェクトを実際に作成し、
-Keystone project・role assignment・Authentik Group・クォータ3種・
-network/subnet/router interface・Application Credential が全て実際に
-作られたことを `openstack`/Authentik API で確認した上で `terraform destroy`
-して削除。2026-09-04）。`terraform/catalog/billing-accounts/` は
+OpenStack プロジェクト・チームネットワーク・ベースライン Security Group・
+Application Credential が払い出される状態。`terraform validate` は全 template で
+確認済み。`catalog/teams/` は実機 Polaris でエンドツーエンド検証済み
+（`sandbox-test` という名前でチームを実際に作成し、Keystone project・
+role assignment・Authentik Group・クォータ3種が作られたことを
+`openstack`/Authentik API で確認した上で `terraform destroy` して削除。
+2026-09-04）。`catalog/projects/` はベースライン SG の追加とアドレス帯の変更で
+構成が変わったため、再検証が必要。`terraform/catalog/billing-accounts/` は
 （前提となる team/project の apply 後に）同様に動作する見込みだが、
 個別には検証していない。
 

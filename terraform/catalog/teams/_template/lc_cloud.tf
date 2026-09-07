@@ -25,6 +25,34 @@ module "quota" {
   quota_override = var.quota_override
 }
 
+# チーム専用ネットワーク。このチームの全プロジェクトの VM がここに乗る。
+# CIDR は指定しない。platform/openstack/network/ の subnetpool から空いている
+# /26 を Neutron が自動で選ぶ（人が採番すると衝突する）。
+# 使い切ったら subnet_block_count を増やして2本目を足す（無停止で追加できる。
+# 既存 VM の IP は変わらず、新しい VM が空きのあるブロックから採番される）。
+resource "openstack_networking_network_v2" "team" {
+  name      = "team-${var.team_name}"
+  tenant_id = openstack_identity_project_v3.this.id
+}
+
+resource "openstack_networking_subnet_v2" "team" {
+  count = var.subnet_block_count
+
+  name          = "team-${var.team_name}-${count.index + 1}"
+  network_id    = openstack_networking_network_v2.team.id
+  tenant_id     = openstack_identity_project_v3.this.id
+  subnetpool_id = var.subnetpool_id
+  ip_version    = 4
+}
+
+# 外向き通信は platform の int-router に集約する。
+resource "openstack_networking_router_interface_v2" "team" {
+  count = var.subnet_block_count
+
+  router_id = var.router_id
+  subnet_id = openstack_networking_subnet_v2.team[count.index].id
+}
+
 # openstack_identity_application_credential_v3（catalog/projects/ が発行する
 # Workspace CI 用credential）はセルフサービス限定のリソースで、admin が
 # 「他プロジェクト用の credential」を代理発行することはできない。作成する

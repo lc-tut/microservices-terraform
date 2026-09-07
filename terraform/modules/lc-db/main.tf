@@ -1,7 +1,7 @@
-# network は catalog/projects/<project_name>/ が作成済みのものを参照する
-# (modules/lc-vm と同じ自動解決パターン)。
+# network は platform/openstack/network/ が作る全プロジェクト共有の internal-net
+# を参照する (modules/lc-vm と同じ)。
 data "openstack_networking_network_v2" "project" {
-  name = var.project_name
+  name = var.network_name
 }
 
 # Trove flavor 一覧が Nova flavor と一致する環境向けの名前解決。

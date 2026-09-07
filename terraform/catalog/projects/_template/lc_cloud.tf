@@ -1,21 +1,39 @@
-# network/subnet は admin 権限で作成しつつ tenant_id を明示することで、
-# チームプロジェクト所有のリソースにする（Neutron は admin による代理作成を許可する）。
-resource "openstack_networking_network_v2" "project" {
-  name      = var.project_name
-  tenant_id = var.team_project_id
+# network/subnet はこの root では作らない。所属チームの
+# catalog/teams/<team-name>/ が /26 を払い出したチーム専用ネットワークを使う。
+# 受け取った名前を output で workspaces/ に渡すだけ。
+data "openstack_networking_network_v2" "team" {
+  name = var.team_network_name
 }
 
-resource "openstack_networking_subnet_v2" "project" {
-  name          = var.project_name
-  network_id    = openstack_networking_network_v2.project.id
-  tenant_id     = var.team_project_id
-  subnetpool_id = var.subnetpool_id
-  ip_version    = 4
+# 同じチームのプロジェクト同士は Keystone project もネットワークも共有するため、
+# ネットワーク上の境界が無い。境界は「同一 SG のメンバーからの ingress だけ許可」
+# するこの SG で作る。remote_group_id は SG 単位なので、別プロジェクトの VM は
+# この SG を付けた VM に到達できない。VM は必ずこの SG を付けて起動する。
+resource "openstack_networking_secgroup_v2" "baseline" {
+  provider             = openstack.team_scoped
+  name                 = "${var.project_name}-baseline"
+  description          = "${var.project_name}: 同一プロジェクト内のみ疎通を許可するベースライン SG"
+  delete_default_rules = true
 }
 
-resource "openstack_networking_router_interface_v2" "project" {
-  router_id = var.vpc_gateway_router_id
-  subnet_id = openstack_networking_subnet_v2.project.id
+resource "openstack_networking_secgroup_rule_v2" "baseline_intra_project" {
+  provider          = openstack.team_scoped
+  security_group_id = openstack_networking_secgroup_v2.baseline.id
+  description       = "同一プロジェクトの VM 間のみ許可"
+
+  direction       = "ingress"
+  ethertype       = "IPv4"
+  remote_group_id = openstack_networking_secgroup_v2.baseline.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "baseline_egress" {
+  provider          = openstack.team_scoped
+  security_group_id = openstack_networking_secgroup_v2.baseline.id
+  description       = "外向き通信（int-router 経由）"
+
+  direction        = "egress"
+  ethertype        = "IPv4"
+  remote_ip_prefix = "0.0.0.0/0"
 }
 
 # openstack_identity_application_credential_v3 はセルフサービス限定のため
@@ -127,7 +145,7 @@ resource "openstack_identity_application_credential_v3" "workspace_ci" {
     path    = "/v3/*/snapshots/**"
   }
 
-  # Neutron: SG のみ（network/subnet/router は catalog が作成済みのため禁止）
+  # Neutron: SG のみ（network/subnet/router interface は catalog が作成済み）
   access_rules {
     service = "network"
     method  = "POST"

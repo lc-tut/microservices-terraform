@@ -3,9 +3,10 @@ variable "name" {
   description = "VM名。同一プロジェクト内で一意にすること"
 }
 
-variable "project_name" {
+variable "network_name" {
   type        = string
-  description = "所属する catalog/projects の名前。同名の network/subnet を data source で自動解決する"
+  default     = "internal-net"
+  description = "VM を載せる共有内部ネットワーク（platform/openstack/network/）"
 }
 
 variable "flavor" {
@@ -45,10 +46,10 @@ variable "user_data" {
   description = "アプリ固有の追加 cloud-init(YAML cloud-config または shebang スクリプト)。CA trust設定と多重パートで合成される"
 }
 
-variable "allow_ssh_from_project_subnet" {
+variable "allow_ssh_from_same_group" {
   type        = bool
   default     = true
-  description = "プロジェクトの subnet CIDR から SSH(22)・ICMP を許可するデフォルトルールを追加するか"
+  description = "この SG のメンバー同士で SSH(22)・ICMP を許可するデフォルトルールを追加するか。internal-net は全プロジェクト共有のため subnet CIDR では絞れない"
 }
 
 variable "security_group_rules" {
@@ -61,7 +62,7 @@ variable "security_group_rules" {
     remote_ip_prefix = optional(string)
   }))
   default     = []
-  description = "追加のセキュリティグループルール。allow_ssh_from_project_subnet でカバーされない通信はここで定義する"
+  description = "追加のセキュリティグループルール。allow_ssh_from_same_group でカバーされない通信はここで定義する"
 }
 
 variable "metadata" {

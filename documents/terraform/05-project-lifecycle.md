@@ -20,6 +20,15 @@ Terraform が作成するリソース:
 | --- | --- |
 | Authentik Group | IdP グループ（SSO 連携のベース） |
 | LC-Cloud Organization | デフォルトクォータでプロジェクトを自動作成 |
+| Team Network | チーム専用 private network `team-<name>` |
+| Team Subnet | subnetpool から `/26` を払い出し（VM 61 台まで） |
+| Router Interface | `int-router` への接続 |
+
+チームのネットワークは、そのチームの全プロジェクトで共有します。CIDR は指定せず、
+`platform/openstack/network/` の subnetpool から空いている `/26` を Neutron が
+自動で選びます。61 台で足りなくなったら `subnet_block_count` を増やして 2 本目の
+`/26` を同じネットワークに足します（既存 VM は無停止。払い出し済みの `/26` を
+`/25` に広げることは Neutron が許しません）。
 
 `outputs.tf` で `organization_id` を公開し、`catalog/projects/` が参照できるようにします。
 
@@ -71,9 +80,7 @@ Terraform が作成するリソース:
 | --- | --- |
 | Harbor Project | コンテナレジストリ |
 | OpenStack Project（Keystone） | プロジェクト作成（admin 権限） |
-| Project Network | プロジェクト専用 private network |
-| Project Subnet | subnetpool から /24 を払い出し |
-| Router Interface | VPC Gateway への接続 |
+| Baseline Security Group | プロジェクト分離（同一プロジェクト内のみ疎通） |
 | Application Credential | Access Rules 付き。Workspace CI/CD 用 |
 | GitHub Actions Secret | Application Credential を Workspace に渡す |
 
@@ -98,21 +105,34 @@ data "terraform_remote_state" "team" {
   }
 }
 
-# プロジェクト専用ネットワーク
-resource "openstack_networking_network_v2" "project" {
-  name = var.project_name
+# ネットワークはこの root では作らない。所属チームの
+# catalog/teams/<team-name>/ が払い出したチーム専用ネットワークを使う。
+data "openstack_networking_network_v2" "team" {
+  name = var.team_network_name
 }
 
-resource "openstack_networking_subnet_v2" "project" {
-  name            = var.project_name
-  network_id      = openstack_networking_network_v2.project.id
-  subnetpool_id   = data.openstack_networking_subnetpool_v2.platform.id
-  prefix_length   = 24
+# 同じチームのプロジェクト同士は Keystone project もネットワークも共有するため、
+# ネットワーク上の境界が無い。境界は同一 SG メンバーからの ingress だけを
+# 許可するこの SG で作る。
+# remote_group_id はプロジェクトを跨いで参照できないため、他プロジェクトの
+# VM はこの SG を付けた VM に到達できない。
+resource "openstack_networking_secgroup_v2" "baseline" {
+  name                 = "${var.project_name}-baseline"
+  delete_default_rules = true
 }
 
-resource "openstack_networking_router_interface_v2" "project" {
-  router_id = data.openstack_networking_router_v2.vpc_gateway.id
-  subnet_id = openstack_networking_subnet_v2.project.id
+resource "openstack_networking_secgroup_rule_v2" "baseline_intra_project" {
+  security_group_id = openstack_networking_secgroup_v2.baseline.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  remote_group_id   = openstack_networking_secgroup_v2.baseline.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "baseline_egress" {
+  security_group_id = openstack_networking_secgroup_v2.baseline.id
+  direction         = "egress"
+  ethertype         = "IPv4"
+  remote_ip_prefix  = "0.0.0.0/0"
 }
 
 # Workspace CI/CD 用 Application Credential（Access Rules 付き）
@@ -143,8 +163,8 @@ resource "github_actions_secret" "app_cred_secret" {
 
 ```hcl
 # terraform/catalog/projects/_template/outputs.tf
-output "network_name"  { value = openstack_networking_network_v2.project.name }
-output "subnet_name"   { value = openstack_networking_subnet_v2.project.name }
+output "network_name"      { value = data.openstack_networking_network_v2.team.name }
+output "security_group_id" { value = openstack_networking_secgroup_v2.baseline.id }
 ```
 
 ---
@@ -194,5 +214,6 @@ Service として登録するだけで、共有 `ingress-nginx` 経由の外部�
 
 1. `workspaces/projects/<name>/` の全リソースを削除して PR → apply
 2. `catalog/projects/<name>/lc_cloud.tf` を削除 または `archived = true` を設定して PR
-3. apply → ネットワーク・DNS ゾーン・Application Credential を削除
+3. apply → Security Group・DNS ゾーン・Application Credential を削除
+   （ネットワークはチームのものなので残る）
 4. Harbor イメージは保持期間ポリシーに従い自動削除
