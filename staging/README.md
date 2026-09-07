@@ -140,6 +140,27 @@ staging/terraform/tf.sh platform/openstack/quotas plan
 > **本番向けに実行するときは `tf.sh` を使わないこと。**
 > 素の `terraform` を叩けば default workspace のままです。
 
+### Authentik の設定はどこまで入るか
+
+ブランド（ロゴ・favicon・flow 背景）・全 Flow（enrollment / recovery /
+annual_renewal / authentication）・ポリシー・グループは、**そのまま staging にも
+入ります**。変数に依存しないただの Authentik リソースだからです。
+
+ブランド画像は `terraform/platform/idp/assets/` を
+raw.githubusercontent.com 経由で参照しています（`brand.tf`）。参照先が `main` に
+固定されているので、**画像を差し替えたときは main に push するまで staging にも
+反映されません**（未 push だと 404 になります）。
+
+一方、**本番の値を入れると壊れる・事故るものが3つ**あります。いずれも空文字が
+既定で、空なら該当リソースを作りません。`staging/terraform/platform-idp.tfvars`
+にも同じことを書いてあります。
+
+| 変数 | 本番の値を入れると |
+| --- | --- |
+| `github_oauth_client_id` / `discord_oauth_client_id` | GitHub/Discord 側に登録されたコールバック URL が本番 Authentik を指しているため、staging から認証を始めても戻ってこられない。試すなら OAuth App を別に作る |
+| `webhook_secret` | **staging の Authentik が本番リポジトリに `repository_dispatch` を撃つ。** enrollment 完了で `auto-gen-members.yaml` を書き換える Bot が動いてしまう |
+| `lc_cloud_oidc_client_id` | `provider_lc_cloud.tf` のリダイレクト URI が本番ホスト名で直書きされていて変数化されていないため、staging の DevStack を指せない。staging で Keystone フェデレーションを試すには、まずそこを変数にする必要がある |
+
 ### メールは本番と同じサーバーを使う
 
 staging の Authentik には本番と同じ SMTP を設定します（`smtp_*` 変数）。
