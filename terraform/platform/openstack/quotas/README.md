@@ -33,6 +33,20 @@ fallback であり、**admin も例外ではない**。実機で確認した状�
 prometheus = m1.small。合計 7 vCPU・14336 MB・4 volume・80 GB）はまだ
 立っていないが、この枠のままでは最初の apply が "Quota exceeded" で落ちる。
 
+実機の容量は以下の通りで、デフォルト枠とは 2 桁違う:
+
+| | 実容量 | 使用量 |
+|---|---|---|
+| compute | lc-sv01 / lc-sv02 / lc-sv03 の 3 台、合計 **168 vCPU** / **658 GB** RAM / local 8046 GB | 0 |
+| cinder | ceph@rbd-1 **808 GB** | 0 |
+
+admin は運用者のプロジェクトでクォータで守る相手が居ないため、有限値を
+置くと「実機の空き」ではなく我々が書いた数字が先に上限になる。実際
+lc-standard-32 相当（cores 32）を当てたところ 168 vCPU に対して明らかに
+小さかったので、**-1（無制限）**にして実効上限をハードウェアに委ねている。
+なお Cinder は元の `gigabytes = 800` の時点で既に Ceph プール全量
+（808 GB）にほぼ達していた。詰まっていたのは Nova 側。
+
 なお admin project は Kolla のデプロイ時に作られる**Terraform 管理外**の
 既存プロジェクトなので、`admin_project.tf` では resource ではなく
 `data "openstack_identity_project_v3"` で引いている。同じく `hekuta` は
