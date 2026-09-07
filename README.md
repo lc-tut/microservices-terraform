@@ -56,6 +56,12 @@ microservices-terraform/
 | 17 | [本番構築ランブック](documents/terraform/17-production-runbook.md) | 本番環境ゼロからの構築手順 |
 | 18 | [権限管理（RBAC）](documents/terraform/18-access-control.md) | Authentik グループ・Keystone ロール・Harbor・K8s RBAC への写像 |
 
+### 関連リポジトリ
+
+| ドキュメント | 内容 |
+| --- | --- |
+| [lcc-external-app まとめ](documents/lcc-external-app.md) | 先行実装されている公開 API（LC-Cloud Middle API）の要約と、本リポジトリへの影響 |
+
 ---
 
 ## 環境構築
