@@ -21,8 +21,13 @@ output "authentik_akadmin_password" {
 }
 
 output "ssh_command" {
-  description = "keypair.tf 参照: 秘密鍵は Terraform 管理外（.ssh/authentik_idp、既存ファイルを使う）"
-  value       = "ssh -i .ssh/authentik_idp rocky@${openstack_networking_floatingip_v2.authentik.address}"
+  description = "keypair.tf 参照: 秘密鍵は Terraform 管理（local_sensitive_file.ssh_private_key が .ssh/authentik_idp に生成）"
+  value       = "ssh -i ${local_sensitive_file.ssh_private_key.filename} rocky@${openstack_networking_floatingip_v2.authentik.address}"
+}
+
+output "ssh_private_key_path" {
+  description = "生成された秘密鍵ファイルのパス"
+  value       = local_sensitive_file.ssh_private_key.filename
 }
 
 output "instance_id" {

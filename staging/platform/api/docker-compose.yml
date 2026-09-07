@@ -1,0 +1,83 @@
+# lcn-infra-api（api / worker / reconciler）と control-plane DB。
+#
+# イメージは staging/platform/deploy-api.sh が用意します。VM の bootstrap 時点では
+# まだ存在しないので、bootstrap は postgres だけを起動します。
+#
+# 認証は OIDC（Bearer の JWT 検証）です。Authentik Outpost の forward-auth は
+# 使いません。そのため NetworkPolicy による「Outpost 以外から届かせない」強制も
+# 不要になり、Kubernetes ではなく Compose で足りています
+# （lcn-infra-api/docs/adr/0017-oidc-authentication.md）。
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: lcn
+      POSTGRES_PASSWORD: ${LCN_DB_PASSWORD}
+      POSTGRES_DB: lcn_infra
+    volumes:
+      # postgres:18 以降は /var/lib/postgresql をマウントする。
+      # /var/lib/postgresql/data にすると unused volume と判定されて起動しない
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lcn -d lcn_infra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # スキーマ移行。**api と worker より先に完了させる**（goose + river）。
+  # 何度流しても安全（適用済みなら何もせず終わる）。
+  migrate:
+    image: ${LCN_INFRA_API_IMAGE}
+    command: ["migrate"]
+    env_file: [.env]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: ${LCN_INFRA_API_IMAGE}
+    command: ["api"]
+    env_file: [.env]
+    # Caddy（host ネットワーク）が 127.0.0.1:8081 に proxy する。
+    # 外へは出さない。TLS 終端と公開は Caddy の担当
+    ports:
+      - "127.0.0.1:8081:8080"
+    extra_hosts: &extra_hosts
+      # Authentik と Harbor は同じ VM の Caddy が終端している。公開 DNS 名を
+      # そのまま引くと VM の外部 IP へ出ることになり、GCE では自分の外部 IP に
+      # 折り返せないため届かない。host-gateway でホスト上の Caddy に落とす。
+      # TLS は SNI にホスト名を使うので、証明書の検証はそのまま通る
+      - "${LCN_AUTH_HOST}:host-gateway"
+      # OpenStack は別 VM。VPC 内の内部 IP へ直接向ける
+      - "${LCN_OPENSTACK_HOST}:${LCN_DEVSTACK_INTERNAL_IP}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # **OpenStack へ書き込む唯一のプロセス**（ADR-0014）
+  worker:
+    image: ${LCN_INFRA_API_IMAGE}
+    command: ["worker"]
+    env_file: [.env]
+    extra_hosts: *extra_hosts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # **1 プロセス固定。増やしてはいけない**
+  reconciler:
+    image: ${LCN_INFRA_API_IMAGE}
+    command: ["reconciler"]
+    env_file: [.env]
+    extra_hosts: *extra_hosts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

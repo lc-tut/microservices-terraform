@@ -25,3 +25,25 @@ variable "ubuntu_min_ram_mb" {
   type    = number
   default = 1024
 }
+
+variable "rocky_image_name" {
+  type        = string
+  description = "Rocky Linux 10 ベースイメージの Glance 登録名（infra/* の VM が data 参照する）"
+  default     = "rocky-10"
+}
+
+variable "rocky_image_source_url" {
+  type        = string
+  description = "Rocky 10 GenericCloud qcow2 の web_download 元 URL"
+  default     = "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-GenericCloud.latest.x86_64.qcow2"
+}
+
+variable "rocky_min_disk_gb" {
+  type    = number
+  default = 10
+}
+
+variable "rocky_min_ram_mb" {
+  type    = number
+  default = 1024
+}

@@ -28,28 +28,39 @@ data "openstack_identity_project_v3" "admin" {
   name = var.admin_project_name
 }
 
-# 値は platform/infra/ の想定使用量（7 vCPU / 14 GB / 4 instance / 80 GB）に対し、
-# 全 VM の同時再構築でも詰まらない程度の余裕を見た。lc-standard-32 相当。
+# admin は運用者のプロジェクトであり、クォータで守る相手が居ない（クォータは
+# テナントを互いから守るための仕組み）。ここを有限値にすると、実機の空き容量
+# ではなく我々が書いた数字が先に上限になる。実際 lc-standard-32 相当
+# （cores 32）を入れてみたところ、下記の実容量に対して明らかに小さかった。
+# よって -1（無制限）にし、実効上限をハードウェアそのものに委ねる。
+#
+# 実機容量（2026-09-07、Nova os-hypervisors/detail・Cinder scheduler-stats）:
+#   compute : lc-sv01 / lc-sv02 / lc-sv03 の 3 台
+#             合計 168 vCPU・673800 MB (658 GB)・local 8046 GB（使用量 0）
+#   cinder  : ceph@rbd-1  total 808 GB / free 808 GB
+#
+# つまり Cinder は元の gigabytes=800 でほぼプール全量に達していた。詰まって
+# いたのは Nova 側（cores 2 → 32 → 無制限）。
 resource "openstack_compute_quotaset_v2" "admin" {
   project_id = data.openstack_identity_project_v3.admin.id
 
-  instances = 20
-  cores     = 32
-  ram       = 65536
+  instances = -1
+  cores     = -1
+  ram       = -1
 
-  server_groups        = 20
-  server_group_members = 5
-  key_pairs            = 20
-  metadata_items       = 128
+  server_groups        = -1
+  server_group_members = -1
+  key_pairs            = -1
+  metadata_items       = -1
 }
 
 resource "openstack_blockstorage_quotaset_v3" "admin" {
   project_id = data.openstack_identity_project_v3.admin.id
 
-  volumes              = 40
-  snapshots            = 40
-  gigabytes            = 800
-  per_volume_gigabytes = 800
-  backups              = 20
-  backup_gigabytes     = 800
+  volumes              = -1
+  snapshots            = -1
+  gigabytes            = -1
+  per_volume_gigabytes = -1
+  backups              = -1
+  backup_gigabytes     = -1
 }
