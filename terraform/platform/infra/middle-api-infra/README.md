@@ -1,7 +1,17 @@
 # infra-api / billing-api 用 VM
 
-OpenStack 上に `lcn-infra-api` と `lcn-billing-api` を1台ずつ作る Terraform root。
+OpenStack 上に `lcn-infra-api` と `lcn-billing-api` を1台ずつ作る、サービス別の Terraform root。
 認証情報受領前に VM 定義とモック検証を準備したもの。実環境への plan / apply は未実施。
+
+## ディレクトリ構成
+
+| ディレクトリ | 管理する VM | CI 入力 |
+| --- | --- | --- |
+| [openstack/](openstack/README.md) | lcn-infra-api 1台 | `MIDDLE_OPENSTACK_VM_CONFIG` |
+| [billing/](billing/README.md) | lcn-billing-api 1台 | `MIDDLE_BILLING_VM_CONFIG` |
+
+それぞれが backend・設定例・provider lock・テストを持つ独立した root。
+この親ディレクトリでは Terraform を実行しない。VM 名は変更しない。
 
 ## 作成するもの
 
@@ -14,14 +24,14 @@ OpenStack 上に `lcn-infra-api` と `lcn-billing-api` を1台ずつ作る Terra
 サブネット ID から所属ネットワークを解決する。イメージは ID を固定する。
 鍵の生成・秘密鍵の保存は Terraform では行わない。
 
-VM の作成までをこの root の完了範囲とする。
+VM の作成までを各 root の完了範囲とする。
 Docker / アプリ / PostgreSQL / Vault Agent / reverse proxy / DNS / TLS はまだ配備しない。
 OS や運用方式が確定した後に、下記のアプリ配備条件を埋める。
 
 ## 認証情報なしで検証する
 
 Terraform `~> 1.10` とインターネット接続（provider 取得用）が必要。
-このディレクトリで実行する。tfvars の作成やクラウドへのログインは不要。
+`openstack/` と `billing/` のそれぞれで実行する。tfvars の作成やクラウドへのログインは不要。
 
 ```sh
 terraform init -backend=false -input=false
@@ -32,8 +42,8 @@ terraform test
 
 テストは全 run に mock provider を使い、OpenStack の実 API や GCS state を操作しない。
 通常の `terraform plan` は認証情報と実環境の入力を受け取った後に行う。
-2026-09-07 に Terraform 1.13.5 / OpenStack provider 3.4.0 で validate と4件のモックテストが成功。
-確認対象は2台の生成計画、SSH 限定の既定値、任意の Floating IP / API 許可、全世界向け SSH と infra の管理ポートの拒否。
+2026-09-07 に Terraform 1.13.5 / OpenStack provider 3.4.0 で 両 root の validate とモックテスト各4件（計8件）が成功。
+確認対象は各 root が対象 VM 1台だけを管理すること、SSH 限定の既定値、任意の Floating IP / API 許可、全世界向け SSH と infra の管理ポートの拒否。
 VM 起動・実ネットワーク到達性・cloud-init 実行は未検証。
 
 ## PL から受け取るもの・確認すること
@@ -56,7 +66,7 @@ VM 起動・実ネットワーク到達性・cloud-init 実行は未検証。
 
 ### 1. 入力と認証
 
-`terraform.tfvars.example` を `terraform.tfvars` にコピーし、すべての `REPLACE_*` と例示 CIDR を実値へ差し替える。
+対象 root の `terraform.tfvars.example` を `terraform.tfvars` にコピーし、すべての `REPLACE_*` と例示 CIDR を実値へ差し替える。
 コピー先は既存 `.gitignore` の対象。認証情報は記入しない。
 不要なら `floating_ip_pool`、`api_allowed_cidrs`、`admin_allowed_cidrs` を省略する。
 
@@ -67,7 +77,13 @@ Application Credential なら `OS_AUTH_TYPE=v3applicationcredential` と
 認証情報の値はリポジトリ・cloud-init・コマンド例へ貼り付けない。
 
 GCS backend は指定された ADC / Workload Identity 等で認証する。
-既存 bucket 内の専用 prefix `tfstate/terraform/platform/infra/middleware-api-infra` を使う。
+既存 bucket 内で以下の prefix に分ける。
+
+- `tfstate/terraform/platform/infra/middle-api-infra/openstack`
+- `tfstate/terraform/platform/infra/middle-api-infra/billing`
+
+旧構成は実 apply 前のため、この作業では state 移行を行っていない。
+別途旧構成を適用済みの場合は、新規 apply 前に既存 state からの移行を確認する。
 state 認証が未着なら、ローカル state に切り替えて実 apply せず受領を待つ。
 
 実環境に接続できる端末で、OpenStack CLI があれば読み取り確認する。
@@ -88,18 +104,18 @@ Floating IP なしの場合は private IP への VPN / 踏み台等の経路が�
 
 ### 2. 実 plan と適用
 
-既存運用どおり PR レビューを通して適用する。手動適用を担当する場合は以下。
+既存運用どおり PR レビューを通して適用する。手動適用を担当する場合は、対象 root（`openstack/` または `billing/`）で以下を実行する。
 
 ```sh
 terraform init -reconfigure -input=false
 terraform plan -input=false -out=tfplan
 terraform show -no-color tfplan
-# project / region / 2台の構成 / 許可元 / 差分をレビューした後
+# project / region / 対象 VM の構成 / 許可元 / 差分をレビューした後
 terraform apply tfplan
-terraform output vms
+terraform output vm
 ```
 
-新規 state かつ例の既定構成なら8リソース追加（VM 2、port 2、SG 2、SSH rule 2）が目安。
+新規 state かつ例の既定構成なら各 root で4リソース追加（VM 1、port 1、SG 1、SSH rule 1）が目安。
 Nova が作るルートボリュームはこの数とは別に OpenStack 上に作成される。
 API 許可は CIDR ごとに rule、Floating IP は各 VM につき2リソース増える。
 既存リソースの削除・置換が現れたら理由を確認する。
@@ -129,7 +145,7 @@ VM 上でコンテナ / systemd 等のどれを使うかを決めてから移す
 proxy で外部由来の認証ヘッダを除去・再設定し、直アクセス拒否を実測する。
 共有 subnet 全体の CIDR を許可すると別 VM が認証を迂回できる場合があるため、proxy の実送信元まで絞る。
 billing の8081は管理 Bearer token と Terraform 実行元制限を両方用意してから開ける。
-5432、80 / 443の受信許可はこの root では作らない。
+5432、80 / 443の受信許可は各 root では作らない。
 Kubernetes 向け Vault 認証をそのまま VM に流用せず、VM の認証方式を確定する。
 
 VM の `prevent_destroy` は設定変更による置換も止める。
@@ -140,13 +156,13 @@ resource 設定自体の削除や OpenStack からの直接削除も保護しな
 ## GitHub Actions
 
 既存の `scripts/detect-platform-stacks.sh` が `backend.tf` を検出し、Plan / Apply 対象になる。
-GitHub Actions variable `MIDDLEWARE_API_VM_CONFIG` に `vm_config` の中身を JSON オブジェクトで登録する。
-構造は tfvars 例と同じで、外側に `vm_config` キーを重ねない。workflow が `TF_VAR_vm_config` として渡す。
+GitHub Actions variable `MIDDLE_OPENSTACK_VM_CONFIG` / `MIDDLE_BILLING_VM_CONFIG` に、それぞれ1台分の `vm_config` の中身を JSON オブジェクトで登録する。
+構造は tfvars 例と同じで、外側に `vm_config` キーを重ねない。workflow が対象 root に対応する変数を選んで `TF_VAR_vm_config` として渡す。
 ローカル tfvars は CI に送られないため、merge 前に実値の登録が必要。
 認証は既存 workflow の OpenStack secrets / GCS Workload Identity を使用する。
 CI 実行元から OpenStack API に到達できることも認証情報受領後に確認する。
 
-準備時点で GitHub variable / secrets の登録、push、実環境 plan / apply は行っていない。
+GitHub variable / secrets の登録、実環境 plan / apply は行っていない。
 
 参考: [OpenStack VM resource](https://registry.terraform.io/providers/terraform-provider-openstack/openstack/latest/docs/resources/compute_instance_v2)、
 [Terraform mock provider](https://developer.hashicorp.com/terraform/language/tests/mocking)。

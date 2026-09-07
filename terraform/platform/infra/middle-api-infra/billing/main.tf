@@ -1,18 +1,19 @@
 # 接続先の共有ネットワーク・鍵は参照のみ。サブネットを明示して複数候補を避ける。
 data "openstack_networking_subnet_v2" "vm" {
-  for_each  = var.vm_config
+  for_each  = local.vms
   subnet_id = each.value.subnet_id
 }
 
 data "openstack_compute_keypair_v2" "vm" {
-  for_each = var.vm_config
+  for_each = local.vms
   name     = each.value.keypair_name
 }
 
 locals {
-  floating_ip_vms = { for service, vm in var.vm_config : service => vm if vm.floating_ip_pool != null }
+  vms             = { billing = var.vm_config }
+  floating_ip_vms = { for service, vm in local.vms : service => vm if vm.floating_ip_pool != null }
   ingress_rules = merge([
-    for service, vm in var.vm_config : merge(
+    for service, vm in local.vms : merge(
       { for cidr in vm.ssh_allowed_cidrs : "${service}/ssh/${cidr}" => { service = service, port = 22, cidr = cidr } },
       { for cidr in vm.api_allowed_cidrs : "${service}/api/${cidr}" => { service = service, port = 8080, cidr = cidr } },
       { for cidr in vm.admin_allowed_cidrs : "${service}/admin/${cidr}" => { service = service, port = 8081, cidr = cidr } },
@@ -21,7 +22,7 @@ locals {
 }
 
 resource "openstack_networking_secgroup_v2" "vm" {
-  for_each    = var.vm_config
+  for_each    = local.vms
   name        = "lcn-${each.key}-api-sg"
   description = "Managed by Terraform: lcn-${each.key}-api"
 }
@@ -39,7 +40,7 @@ resource "openstack_networking_secgroup_rule_v2" "ingress" {
 
 # platform/infra の既存 VM と同様に明示ポートへ SG / Floating IP を関連付ける。
 resource "openstack_networking_port_v2" "vm" {
-  for_each              = var.vm_config
+  for_each              = local.vms
   name                  = "lcn-${each.key}-api"
   network_id            = data.openstack_networking_subnet_v2.vm[each.key].network_id
   admin_state_up        = true
@@ -53,7 +54,7 @@ resource "openstack_networking_port_v2" "vm" {
 }
 
 resource "openstack_compute_instance_v2" "vm" {
-  for_each            = var.vm_config
+  for_each            = local.vms
   name                = "lcn-${each.key}-api"
   flavor_id           = each.value.flavor_id
   key_pair            = data.openstack_compute_keypair_v2.vm[each.key].name
@@ -72,7 +73,7 @@ resource "openstack_compute_instance_v2" "vm" {
       path        = "/opt/lcn-${each.key}-api/PROVISIONING.txt"
       owner       = "root:root"
       permissions = "0644"
-      content     = "VM prepared by middleware-api-infra. Application deployment is pending.\n"
+      content     = "VM prepared by middle-api-infra/billing. Application deployment is pending.\n"
     }]
   })}"
 

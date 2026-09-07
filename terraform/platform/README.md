@@ -14,4 +14,4 @@
 `documents/terraform/` を参照してください。
 
 infra-api / billing-api 用 VM の準備と適用手順は
-[`infra/middleware-api-infra/README.md`](infra/middleware-api-infra/README.md) を参照。
+[`infra/middle-api-infra/README.md`](infra/middle-api-infra/README.md) を参照。

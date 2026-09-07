@@ -119,8 +119,10 @@ jobs:
       - name: Apply
         working-directory: ${{ matrix.stack }}
         env:
-          # middleware-api-infra 用の非秘密 JSON。他 root では未宣言のため無視される。
-          TF_VAR_vm_config: ${{ vars.MIDDLEWARE_API_VM_CONFIG }}
+          # 対象 root の1台分の非秘密 JSON を渡す。
+          TF_VAR_vm_config: >-
+            ${{ matrix.stack == 'terraform/platform/infra/middle-api-infra/openstack' && vars.MIDDLE_OPENSTACK_VM_CONFIG ||
+                matrix.stack == 'terraform/platform/infra/middle-api-infra/billing' && vars.MIDDLE_BILLING_VM_CONFIG || '' }}
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           TF_VAR_smtp_host: ${{ secrets.SMTP_HOST }}
           TF_VAR_smtp_port: ${{ secrets.SMTP_PORT }}
