@@ -1,0 +1,26 @@
+# コピー先 terraform.tfvars は gitignore 済み。認証情報は書かない。
+# REPLACE_* は PL から受け取る値・実環境で確認した値に差し替える。
+# 40 GB は準備用の例。flavor / image の最小ディスク要件と容量方針を確認する。
+vm_config = {
+  infra = {
+    image_id          = "REPLACE_IMAGE_UUID"
+    flavor_id         = "REPLACE_FLAVOR_ID"
+    subnet_id         = "REPLACE_SUBNET_UUID"
+    keypair_name      = "REPLACE_EXISTING_KEYPAIR_NAME"
+    root_volume_size  = 40
+    ssh_allowed_cidrs = ["192.0.2.10/32"] # 例示用。実際の管理端末 / 踏み台送信元に差し替える。
+    # floating_ip_pool = "REPLACE_EXTERNAL_NETWORK_NAME" # 外部 IP が必要な場合だけ指定
+    # api_allowed_cidrs = ["192.0.2.20/32"] # forward-auth を行う proxy の実送信元
+  }
+  billing = {
+    image_id          = "REPLACE_IMAGE_UUID"
+    flavor_id         = "REPLACE_FLAVOR_ID"
+    subnet_id         = "REPLACE_SUBNET_UUID"
+    keypair_name      = "REPLACE_EXISTING_KEYPAIR_NAME"
+    root_volume_size  = 40
+    ssh_allowed_cidrs = ["192.0.2.10/32"]
+    # floating_ip_pool = "REPLACE_EXTERNAL_NETWORK_NAME"
+    # api_allowed_cidrs = ["192.0.2.20/32"]
+    # admin_allowed_cidrs = ["192.0.2.30/32"] # 管理 Bearer 認証を設定した後の Terraform 実行元
+  }
+}

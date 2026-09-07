@@ -99,6 +99,8 @@ jobs:
         id: plan
         working-directory: ${{ matrix.stack }}
         env:
+          # middleware-api-infra 用の非秘密 JSON。他 root では未宣言のため無視される。
+          TF_VAR_vm_config: ${{ vars.MIDDLEWARE_API_VM_CONFIG }}
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           # OpenStack は clouds.yaml を介さず auth_url + OS_* 環境変数で認証する。
           # application credential は作成時のプロジェクトに固定され system スコープの

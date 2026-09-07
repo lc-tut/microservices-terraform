@@ -119,6 +119,8 @@ jobs:
       - name: Apply
         working-directory: ${{ matrix.stack }}
         env:
+          # middleware-api-infra 用の非秘密 JSON。他 root では未宣言のため無視される。
+          TF_VAR_vm_config: ${{ vars.MIDDLEWARE_API_VM_CONFIG }}
           TF_VAR_authentik_token: ${{ secrets.AUTHENTIK_TOKEN }}
           TF_VAR_smtp_host: ${{ secrets.SMTP_HOST }}
           TF_VAR_smtp_port: ${{ secrets.SMTP_PORT }}

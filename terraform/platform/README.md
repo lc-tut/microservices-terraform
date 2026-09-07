@@ -12,3 +12,6 @@
 実機構成の詳細（認証情報の出所・デプロイ手順・実際に採用した構成等）は各ディレクトリの
 `README.md` を参照してください。設計そのもの（なぜこの形にしたか）は
 `documents/terraform/` を参照してください。
+
+infra-api / billing-api 用 VM の準備と適用手順は
+[`infra/middleware-api-infra/README.md`](infra/middleware-api-infra/README.md) を参照。
