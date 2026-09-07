@@ -26,14 +26,18 @@ resource "authentik_provider_oauth2" "lc_cloud" {
   authorization_flow = data.authentik_flow.default_authorization.id
   invalidation_flow  = data.authentik_flow.default_invalidation.id
 
+  # コールバック先のパスは Horizon と Keystone の仕様で決まっているので固定し、
+  # 環境ごとに変わるベース URL だけを変数にしている。
+  # DevStack のように Horizon と Keystone が同じホストに同居する構成
+  # （keystone が /identity にぶら下がる）も、この2つで表現できる。
   allowed_redirect_uris = [
     {
       matching_mode = "strict"
-      url           = "https://horizon.lc-cloud.example.internal/auth/callback"
+      url           = "${var.lc_cloud_horizon_url}/auth/callback"
     },
     {
       matching_mode = "strict"
-      url           = "https://keystone.lc-cloud.example.internal/v3/OS-FEDERATION/protocols/openid/auth"
+      url           = "${var.lc_cloud_keystone_url}/v3/OS-FEDERATION/protocols/openid/auth"
     },
   ]
 

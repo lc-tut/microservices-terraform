@@ -77,6 +77,22 @@ local/vault/.env
 local/handover*
 .envrc
 
+# staging 環境の秘密情報（local/ と同じ方針）
+staging/clouds.yaml
+staging/gcp/terraform.tfvars
+staging/platform/authentik/.env
+staging/platform/api/.env
+staging/platform/api/.compose.env
+
+# staging/terraform/*.tfvars は秘密値を持たない（接続先とフラグだけ。認証情報は
+# staging/gcp の output から tf.sh が環境変数で渡す）。上の *.tfvars 除外から戻す
+!staging/terraform/*.tfvars
+
+# 入部者リスト CSV/TSV（学籍番号・メールアドレスを含む。scripts/members-from-csv.py の入力）
+# 追跡したいファイルができたら `git add -f` するか、ここに否定パターンを足す
+*.csv
+*.tsv
+
 # SOPS 復号後の平文（絶対に含めない）
 *.dec
 *_secrets.yaml

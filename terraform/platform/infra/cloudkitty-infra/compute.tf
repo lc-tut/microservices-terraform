@@ -17,7 +17,7 @@ locals {
 resource "openstack_compute_instance_v2" "cloudkitty" {
   name        = var.instance_name
   flavor_name = var.flavor_name
-  key_pair    = data.openstack_compute_keypair_v2.cloudkitty.name
+  key_pair    = openstack_compute_keypair_v2.cloudkitty.name
   user_data   = local.cloud_init
 
   block_device {

@@ -16,6 +16,56 @@ Neutron には同等の API が無い（`neutron.conf` の static 設定のみ�
 Neutron のクォータはここでは扱わない（OpenStack インフラ自体の管理範囲。
 `documents/terraform/01-overview.md`「管理対象外」参照）。
 
+## 管理者プロジェクトの除外
+
+quota class `default` は「個別の quota 行を持たない全プロジェクト」への
+fallback であり、**admin も例外ではない**。実機で確認した状態
+（2026-09-07、Keystone / Nova / Cinder API 直叩き）:
+
+| 項目 | 実測 |
+|---|---|
+| プロジェクト | `admin`, `service` の 2 つだけ |
+| admin の Nova quota | cores 2 / instances 3 / ram 4096（in_use すべて 0） |
+| admin の Cinder quota | volumes 5 / gigabytes 50（in_use すべて 0） |
+| 稼働中の server / volume | 0 / 0 |
+
+`platform/infra/` の 4 VM（idp / harbor / cloudkitty = m1.medium、
+prometheus = m1.small。合計 7 vCPU・14336 MB・4 volume・80 GB）はまだ
+立っていないが、この枠のままでは最初の apply が "Quota exceeded" で落ちる。
+
+実機の容量は以下の通りで、デフォルト枠とは 2 桁違う:
+
+| | 実容量 | 使用量 |
+|---|---|---|
+| compute | lc-sv01 / lc-sv02 / lc-sv03 の 3 台、合計 **168 vCPU** / **658 GB** RAM / local 8046 GB | 0 |
+| cinder | ceph@rbd-1 **808 GB** | 0 |
+
+admin は運用者のプロジェクトでクォータで守る相手が居ないため、有限値を
+置くと「実機の空き」ではなく我々が書いた数字が先に上限になる。実際
+lc-standard-32 相当（cores 32）を当てたところ 168 vCPU に対して明らかに
+小さかったので、**-1（無制限）**にして実効上限をハードウェアに委ねている。
+なお Cinder は元の `gigabytes = 800` の時点で既に Ceph プール全量
+（808 GB）にほぼ達していた。詰まっていたのは Nova 側。
+
+なお admin project は Kolla のデプロイ時に作られる**Terraform 管理外**の
+既存プロジェクトなので、`admin_project.tf` では resource ではなく
+`data "openstack_identity_project_v3"` で引いている。同じく `hekuta` は
+**user** であって project ではない（admin project に admin ロールを持つ）。
+除外対象の project は `admin` ひとつ。
+
+Neutron は触らない（このルートの管理対象外。admin の Neutron は
+OpenStack 素の既定のままで十分大きく、`modules/lc-cloud-quota` のティアを
+当てると floatingip が逆に絞られて既存の割り当てを下回りうる）。
+
+**apply 前の確認**: 対象プロジェクトの現使用量が新しい枠を超えていないこと。
+下回る値を PUT しても既存リソースは消えないが、以後の作成が全て塞がる。
+上記の通り現在は in_use が全て 0 なので、この変更に関しては問題ない。
+
+```bash
+openstack quota show --default                                 # デフォルト（quota class）
+openstack limits show --absolute --project <admin project id>  # 現使用量
+```
+
 ## 実機で判明した罠
 
 実機検証済み（ローカル DevStack・Polaris 実機の両方。Nova・Cinder とも

@@ -46,6 +46,26 @@ variable "lc_cloud_oidc_client_secret" {
   default   = ""
 }
 
+# リダイレクト先のベース URL。パス部分（Horizon の /auth/callback、Keystone の
+# /v3/OS-FEDERATION/protocols/openid/auth）は製品側の仕様で固定なので
+# provider_lc_cloud.tf に置いたままにし、環境ごとに変わるここだけを変数にする。
+# 既定は本番の値なので、本番側は指定しなくても従来どおり動く。
+variable "lc_cloud_horizon_url" {
+  type        = string
+  default     = "https://horizon.lc-cloud.example.internal"
+  description = "Horizon のベース URL（末尾スラッシュなし）"
+}
+
+variable "lc_cloud_keystone_url" {
+  type        = string
+  default     = "https://keystone.lc-cloud.example.internal"
+  description = <<-EOT
+    Keystone のベース URL（末尾スラッシュなし）。
+    DevStack のように Keystone が /identity にぶら下がる構成では
+    "http://openstack.example/identity" のようにパスまで含めて渡す。
+  EOT
+}
+
 # Harbor OIDC プロバイダ — 空文字のままにするとプロバイダは作成されない。
 # terraform/platform/infra/harbor-infra/ の `terraform output -raw harbor_url` を渡す。
 # client_secret は Authentik 側が生成する（terraform/platform/harbor/ に渡す出力
@@ -131,4 +151,21 @@ variable "smtp_from_address" {
   type        = string
   description = "メール送信元アドレス"
   default     = ""
+}
+
+# Middleware API（lcn-infra-api / lcn-billing-api）用 OIDC プロバイダ。
+# 空文字のままにするとプロバイダは作成されない
+variable "middleware_oidc_client_id" {
+  type        = string
+  default     = ""
+  description = "Middleware API の client_id 兼 audience 兼 application slug。staging/gcp の oidc_client_id と揃えること"
+}
+
+variable "middleware_oidc_redirect_uris" {
+  type        = list(string)
+  default     = []
+  description = <<-EOT
+    OIDC のリダイレクト先。SPA と CLI のコールバック URL を列挙する。
+    例: ["https://console.staging.lcn.ad.jp/oauth/callback", "http://localhost:8888/callback"]
+  EOT
 }

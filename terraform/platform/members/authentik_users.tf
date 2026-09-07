@@ -74,7 +74,10 @@ resource "authentik_user" "members" {
 # 実機検証済み（2026-08-25）: ja_JP 翻訳カタログは同梱されており、
 # このヘッダーだけで件名・本文とも日本語化されることを確認済み
 resource "null_resource" "send_enrollment_email" {
-  for_each = { for id, m in local.members_by_id : id => m if m.status == "active" }
+  # staging では false にする。台帳には本物のメールアドレスが入っているため、
+  # 検証環境から apply すると全 active メンバーに本物のウェルカムメールが飛ぶ
+  # （staging/terraform/members.tfvars 参照）
+  for_each = var.send_enrollment_email ? { for id, m in local.members_by_id : id => m if m.status == "active" } : {}
 
   triggers = {
     user_pk = authentik_user.members[each.key].id

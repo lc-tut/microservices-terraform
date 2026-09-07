@@ -8,3 +8,12 @@ variable "openstack_admin_project_id" {
     ために変数だけ残してある。
   EOT
 }
+
+variable "admin_project_name" {
+  type        = string
+  default     = "admin"
+  description = <<-EOT
+    グローバルデフォルトから除外する管理者プロジェクト名。
+    platform/infra/ の os_admin_project_name と同じ既定値。
+  EOT
+}

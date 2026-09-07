@@ -1,8 +1,13 @@
-# 実機確認（2026-09-04）: 既存の CloudKitty VM を新規作成せず import して継続する
-# ことにしたため、その VM が使っている既存 keypair "ck-polaris" を data 参照
-# する（idp-infra/keypair.tf と同じ理由・同じパターン。tls_private_key は
-# terraform import に対応しておらず、既存の秘密鍵と安全に同期できないため）。
-# 秘密鍵は local/polaris/ck_key（.gitignore 済み）を使う。
-data "openstack_compute_keypair_v2" "cloudkitty" {
-  name = "ck-polaris"
+# lc-sv01（新クラスタ）には既存 keypair "ck-polaris" が存在しないため新規作成する。
+# keypair は OpenStack(Nova)側で生成・管理する。public_key を渡さないと Nova が
+# 鍵ペアを生成し、秘密鍵(private_key)を返す。秘密鍵は state に保存され、SSH 用に
+# local_sensitive_file で ${path.module}/.ssh/cloudkitty へ 0600 で書き出す（.gitignore 済み想定）。
+resource "openstack_compute_keypair_v2" "cloudkitty" {
+  name = "cloudkitty-infra"
+}
+
+resource "local_sensitive_file" "ssh_private_key" {
+  content         = openstack_compute_keypair_v2.cloudkitty.private_key
+  filename        = "${path.module}/.ssh/cloudkitty"
+  file_permission = "0600"
 }
