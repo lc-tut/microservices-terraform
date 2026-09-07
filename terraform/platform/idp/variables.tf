@@ -46,6 +46,26 @@ variable "lc_cloud_oidc_client_secret" {
   default   = ""
 }
 
+# リダイレクト先のベース URL。パス部分（Horizon の /auth/callback、Keystone の
+# /v3/OS-FEDERATION/protocols/openid/auth）は製品側の仕様で固定なので
+# provider_lc_cloud.tf に置いたままにし、環境ごとに変わるここだけを変数にする。
+# 既定は本番の値なので、本番側は指定しなくても従来どおり動く。
+variable "lc_cloud_horizon_url" {
+  type        = string
+  default     = "https://horizon.lc-cloud.example.internal"
+  description = "Horizon のベース URL（末尾スラッシュなし）"
+}
+
+variable "lc_cloud_keystone_url" {
+  type        = string
+  default     = "https://keystone.lc-cloud.example.internal"
+  description = <<-EOT
+    Keystone のベース URL（末尾スラッシュなし）。
+    DevStack のように Keystone が /identity にぶら下がる構成では
+    "http://openstack.example/identity" のようにパスまで含めて渡す。
+  EOT
+}
+
 # Harbor OIDC プロバイダ — 空文字のままにするとプロバイダは作成されない。
 # terraform/platform/infra/harbor-infra/ の `terraform output -raw harbor_url` を渡す。
 # client_secret は Authentik 側が生成する（terraform/platform/harbor/ に渡す出力

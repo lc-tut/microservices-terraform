@@ -34,32 +34,34 @@ middleware_oidc_redirect_uris = [
 ]
 
 # ---------------------------------------------------------------------------
-# **本番の値を入れてはいけないもの**
+# LC-Cloud OIDC プロバイダ（Keystone フェデレーション）
 # ---------------------------------------------------------------------------
-# 以下はすべて空文字が既定で、空なら該当リソースを作らない。
-# staging では空のままにしておくのが安全側。
+# リダイレクト先は provider_lc_cloud.tf でベース URL が変数化されているので、
+# staging の DevStack を指せる。パス（Horizon の /auth/callback、Keystone の
+# /v3/OS-FEDERATION/protocols/openid/auth）は製品仕様で固定。
+#
+# **ホスト名は staging/gcp の dns_zone に合わせて書き換えること。**
+# DevStack は Horizon と Keystone が同じホストに同居し、Keystone は /identity に
+# ぶら下がるので、2つの変数の関係が本番とは少し違う。
+lc_cloud_oidc_client_id = "lc-cloud"
+lc_cloud_horizon_url    = "http://openstack.staging.lcn.ad.jp"
+lc_cloud_keystone_url   = "http://openstack.staging.lcn.ad.jp/identity"
 
-# GitHub / Discord の OAuth Source。
-# **本番と同じ client_id を入れると壊れる。** GitHub/Discord 側に登録されている
-# コールバック URL は本番 Authentik のホストを指しているので、staging から
-# 認証を始めても戻ってこられない。staging で試すなら OAuth App を別に作り、
-# コールバックを https://auth.<staging zone>/source/oauth/callback/<slug>/ で登録すること。
-# github_oauth_client_id  = ""
-# discord_oauth_client_id = ""
+# client_secret は空なら Authentik が生成する。Keystone 側の設定に
+# terraform output から渡すこと
+# lc_cloud_oidc_client_secret = ""
 
-# 通知 Webhook。
-# **入れると staging の Authentik が本番リポジトリに repository_dispatch を撃つ。**
-# enrollment 完了で auto-gen-members.yaml を書き換える Bot が動いてしまうので、
-# staging では空のままにすること。試すならフォークを github_repo_owner に指定する。
-# webhook_secret = ""
-
-# LC-Cloud OIDC プロバイダ（Keystone フェデレーション）。
-# **staging では使えない。** provider_lc_cloud.tf のリダイレクト URI が
-# horizon.lc-cloud.example.internal / keystone.lc-cloud.example.internal に
-# 直書きされていて変数化されていないため、staging の DevStack を指せない。
-# staging で Keystone フェデレーションを試すなら、まず provider_lc_cloud.tf の
-# URI を変数にする必要がある。
-# lc_cloud_oidc_client_id = ""
+# ---------------------------------------------------------------------------
+# staging では使わないもの
+# ---------------------------------------------------------------------------
+# いずれも空文字が既定で、空なら該当リソースを作らない。**空のままにする。**
+#
+#   webhook_secret           入れると staging の Authentik が本番リポジトリへ
+#                            repository_dispatch を撃ち、auto-gen-members.yaml を
+#                            書き換える Bot が動いてしまう
+#   github_oauth_client_id   GitHub/Discord 側に登録されたコールバック URL が
+#   discord_oauth_client_id  本番 Authentik を指しているため、staging から
+#                            認証を始めても戻ってこられない
 
 # Harbor の OIDC 連携。staging の Harbor を指すなら設定してよい
 # harbor_url = "https://harbor.staging.lcn.ad.jp"
