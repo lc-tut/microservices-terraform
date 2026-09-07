@@ -1,3 +1,12 @@
 members:
-  - id: "lcn_9a2bb6e30171"
-    role: "circle-admin"
+  - id: "lcn_4fbe8202d877"
+    role: "member"
+
+  - id: "lcn_17c5bc7795ce"
+    role: "member"
+
+  - id: "lcn_be0609aafd8a"
+    role: "member"
+
+  - id: "lcn_c065ea5dd7dd"
+    role: "member"

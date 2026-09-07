@@ -72,6 +72,11 @@ local/gcp-devstack/windows-autostop/*.vbs
 local/.secrets
 local/.act.env
 local/vault/.env
+# ローカルに置く SSH 秘密鍵（middle-api-infra の VM 用など。
+# terraform/platform/infra/*/.ssh/ と同じ方針で追跡しない）
+local/*-key
+local/*.pem
+
 # 共有相手に渡す認証情報の受け渡し用（コミットしない）
 # 圧縮して渡すことがあるため handover* で拾う
 local/handover*
@@ -103,4 +108,5 @@ terraform/platform/members/alumni/**/auto-gen-*.yaml
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.dblocal/middle-api-key
+local/middle-api-key.pub
