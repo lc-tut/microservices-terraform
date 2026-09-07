@@ -1,0 +1,13 @@
+# コピー先 terraform.tfvars は gitignore 済み。認証情報は書かない。
+# openstack/ 専用。REPLACE_* と例示 CIDR を接続先の実値に差し替える。
+# 40 GB は例。イメージと flavor の最小ディスク要件を確認する。
+vm_config = {
+  image_id          = "REPLACE_IMAGE_UUID"
+  flavor_id         = "REPLACE_FLAVOR_ID"
+  subnet_id         = "REPLACE_SUBNET_UUID"
+  keypair_name      = "REPLACE_EXISTING_KEYPAIR_NAME"
+  root_volume_size  = 40
+  ssh_allowed_cidrs = ["192.0.2.10/32"]
+  # floating_ip_pool = "REPLACE_EXTERNAL_NETWORK_NAME"
+  # api_allowed_cidrs = ["192.0.2.20/32"] # forward-auth proxy の実送信元
+}
