@@ -1,12 +1,13 @@
-# 実機確認（2026-09-04）: 元は tls_private_key + openstack_compute_keypair_v2
-# (resource) で新規生成する設計だったが、tls_private_key は terraform import に
-# 対応しておらず、既に存在する実際の keypair "authentik-idp" と秘密鍵ファイル
-# （.ssh/authentik_idp、gitignore 済み・SSH に使用中）を安全に管理下へ移す方法が
-# 無かった。誤って再 apply すると新しい鍵で keypair を作り直そうとして
-# （keypair の public_key は変更不可のため force-replace になり）既存 VM への
-# SSH 経路を壊すリスクがあるため、既存 keypair は data 参照のみに留める
-# （terraform/platform/openstack/network/ で ext-net を data 参照のみにしたのと
-# 同じ考え方）。
-data "openstack_compute_keypair_v2" "authentik" {
+# lc-sv01（新クラスタ）には既存 keypair "authentik-idp" が存在しないため新規作成する。
+# keypair は OpenStack(Nova)側で生成・管理する。public_key を渡さないと Nova が
+# 鍵ペアを生成し、秘密鍵(private_key)を返す。秘密鍵は state に保存され、SSH 用に
+# local_sensitive_file で ${path.module}/.ssh/authentik_idp へ 0600 で書き出す（.gitignore 済み想定）。
+resource "openstack_compute_keypair_v2" "authentik" {
   name = "authentik-idp"
+}
+
+resource "local_sensitive_file" "ssh_private_key" {
+  content         = openstack_compute_keypair_v2.authentik.private_key
+  filename        = "${path.module}/.ssh/authentik_idp"
+  file_permission = "0600"
 }

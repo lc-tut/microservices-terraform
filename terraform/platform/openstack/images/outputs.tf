@@ -17,3 +17,7 @@ output "ssh_ca_private_key_openssh" {
   description = "証明書署名用の CA 秘密鍵。Phase 6 Middleware API 以外には渡さない"
   sensitive   = true
 }
+
+output "rocky_image_id" {
+  value = openstack_images_image_v2.rocky.id
+}
